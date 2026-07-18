@@ -1,0 +1,21 @@
+<Project>
+
+  <!-- Central Package Management: one place for every dependency version. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Determinism guardrail: bans System.Math / IO / Net etc. in Sim.Core (roadmap §2.3) -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="3.3.4" />
+
+    <!-- Test stack -->
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <!-- Property-based testing, C#-native (roadmap §1) -->
+    <PackageVersion Include="CsCheck" Version="4.4.0" />
+  </ItemGroup>
+
+</Project>

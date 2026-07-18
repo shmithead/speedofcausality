@@ -1,0 +1,21 @@
+# Banned APIs in Sim.Core — enforces roadmap §2.3 determinism rules.
+# Format: https://github.com/dotnet/roslyn-analyzers/blob/main/src/Microsoft.CodeAnalysis.BannedApiAnalyzers/BannedApiAnalyzers.Help.md
+
+# Rule 1 — no wall-clock inside the sim
+T:System.DateTime; Use the sim Clock; wall-clock reads make replays non-deterministic (§2.3 r1).
+T:System.DateTimeOffset; Use the sim Clock; wall-clock reads make replays non-deterministic (§2.3 r1).
+T:System.Environment; No environment reads inside Sim.Core (§2.3 r1).
+
+# Rule 1/2 — no non-portable transcendentals or float math; use the fixed-point lib (§2.5)
+T:System.Math; System.Math.Sin/Cos/Exp/Pow are not bit-identical cross-OS. Use Sim.Core fixed-point trig/sqrt (§2.5).
+T:System.MathF; Single-precision transcendentals are non-portable. Use the fixed-point lib (§2.5).
+
+# Rule 4 — no ambient RNG; use the seeded per-subsystem streams (§2.3 r4)
+T:System.Random; Use the sim's seeded RNG streams, one per subsystem (§2.3 r4).
+T:System.Guid; Guid.NewGuid is non-deterministic; ids come from the sim, not the platform.
+
+# Rule 6 — Sim.Core touches no IO or network
+N:System.Net; Sim.Core is pure; no network (§2.3 r6).
+T:System.IO.File; Sim.Core is pure; persistence lives in a separate layer (§2.3 r6).
+T:System.IO.Directory; Sim.Core is pure; persistence lives in a separate layer (§2.3 r6).
+T:System.IO.FileStream; Sim.Core is pure; persistence lives in a separate layer (§2.3 r6).

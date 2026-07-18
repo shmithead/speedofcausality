@@ -1,0 +1,67 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# The Phase 0 gate (roadmap §5): same seed -> byte-identical output on Windows AND Linux.
+# build-test proves it per-OS against the committed golden; determinism-gate proves the two
+# OSes agree with each other. Do not merge on red.
+jobs:
+  build-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore SpeedOfCausality.slnx
+
+      - name: Build (warnings are errors)
+        run: dotnet build SpeedOfCausality.slnx -c Release --no-restore
+
+      - name: Test
+        run: dotnet test SpeedOfCausality.slnx -c Release --no-build
+
+      # Produce a longer deterministic trace than the committed golden, for the cross-OS diff.
+      - name: Generate determinism trace
+        run: dotnet run --project src/Sim.Tools -c Release --no-build -- run --seed 42 --steps 4096 --out smoke-${{ runner.os }}.txt
+
+      - name: Upload determinism trace
+        uses: actions/upload-artifact@v4
+        with:
+          name: determinism-${{ runner.os }}
+          path: smoke-${{ runner.os }}.txt
+          if-no-files-found: error
+
+  determinism-gate:
+    needs: build-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all traces
+        uses: actions/download-artifact@v4
+        with:
+          path: traces
+
+      - name: Compare Windows vs Linux (byte-identical or fail)
+        run: |
+          linux=traces/determinism-Linux/smoke-Linux.txt
+          windows=traces/determinism-Windows/smoke-Windows.txt
+          echo "Linux : $(sha256sum "$linux"  | cut -d' ' -f1)"
+          echo "Windows: $(sha256sum "$windows" | cut -d' ' -f1)"
+          if ! diff -q "$linux" "$windows" > /dev/null; then
+            echo "::error::Cross-OS determinism gate FAILED — traces differ"
+            diff "$linux" "$windows" | head -20
+            exit 1
+          fi
+          echo "Cross-OS determinism gate passed: Windows and Linux traces are byte-identical."
