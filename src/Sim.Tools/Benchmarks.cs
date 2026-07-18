@@ -60,8 +60,10 @@ internal static class Benchmarks
         Console.WriteLine($"Brewer mode (every entity solved every tick):  {brewer,10:F2} sim-years/min   -> 50-yr soak {SoakMinutes(brewer)}");
         Console.WriteLine($"Rails mode  (every entity a table lookup):     {rails,10:F2} sim-years/min   -> 50-yr soak {SoakMinutes(rails)}");
         Console.WriteLine();
-        Console.WriteLine("The design's horizon-optimized number lands at or below rails mode (most");
-        Console.WriteLine("entities idle most ticks) and needs the horizon system to measure directly.");
+        Console.WriteLine("Both rows are FLOORS, not bounds. The real rate is BELOW rails: real ticks have");
+        Console.WriteLine("decision points (~30x a lookup), and their fraction is the horizon system's output.");
+        Console.WriteLine("Gate: does the horizon calculation cost less than the solves it saves? Not yet");
+        Console.WriteLine("measurable here -- a proxy has no horizons. Horizons are the rest of the benchmark.");
         return 0;
     }
 

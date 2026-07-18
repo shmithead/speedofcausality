@@ -21,26 +21,46 @@ argument in one number: horizons turn solves into lookups.
 
 ## Derived sim-years/minute (60 bodies + 200 ships, 1-minute ticks)
 
-Two honest brackets — the true horizon-optimized number lands between them and needs the horizon
-system built to measure directly.
-
 | Scenario | sim-years/min | 50-year soak |
 |---|---:|---:|
-| **Brewer mode** — every entity a full Kepler solve every tick (his naive path) | 0.61 | ~82 min |
+| **Brewer mode** — every entity a full Kepler solve every tick | 0.61 | ~82 min |
 | **Rails mode** — every entity a table lookup every tick | 13.2 | ~3.8 min |
 
-**Read:** Brewer mode reproduces his wall — a 50-year soak in ~1.4 hours is marginal, exactly his
-experience. Rails mode clears the soak in minutes. Even the *pessimistic* bracket is runnable
-(unlike a hard failure), and the ephemeris table already drags the common case toward rails.
+**These are not bounds on the real answer. Both are floors, and the real number is below rails.**
 
-## The two §2.7 numbers — not yet produced
+- *Brewer mode (0.61)* is his path reproduced deliberately — a reference point, not our floor. Our
+  CORDIC is slower than his `Math.Sin`, but we have rails / horizons / scope he did not.
+- *Rails mode (13.2)* is an **optimistic** floor: it assumes zero decision points, zero reception
+  solves, zero rumor propagation — nothing is ever deciding.
 
-§2.7 asks for **ship-observers affordable per in-scope event** and **fraction of ticks that touch a
-decision point.** Both require the built tick loop + validity horizons + the reception root-find as
-a full loop (not the single-iteration `Atan2` proxy used here). Those are the next build items.
-What this benchmark establishes: **the primitives are not the wall.** The correctness half of
-Risk 1 is retired (verified cross-OS); the performance half now has endpoints, and they say the
-design is not dead on arrival.
+Real ticks have decision points, and a decision point costs a solve **plus** a reception root-find
+(≈1 µs, ~30× a lookup). So the true rate sits **below** rails, and how far below is set entirely by
+the fraction of entity-ticks that touch a decision point — which is one of the two §2.7 numbers, and
+is itself an **output of the horizon system**. The brackets locate the interval; they do not bound it.
+
+## The real gate — and why horizons *are* the rest of the benchmark
+
+§2.7's two numbers — **ship-observers affordable per in-scope event** and **fraction of ticks that
+touch a decision point** — are the horizon system's output. They cannot be proxied, because a proxy
+has no horizons. So this is not "benchmark now, horizons later"; the horizon system is the rest of
+the benchmark.
+
+The gate question is therefore **not** "lookup vs solve." It is: **does the horizon calculation cost
+less than the solves it saves?** If yes, the sim runs near rails. If the horizon calculation is
+expensive — §2.7's flagged failure, "if 'what's the earliest thing that could change her mind?' is
+costly, you default to short horizons and lose the win" — then decision points multiply and the rate
+slides toward Brewer. The **reception root-find** is the piece to watch: it collapses to closed-form
+only when both endpoints are horizon-valid, and a real solve is several iterations plus both
+endpoints' Kepler positions — not the single-iteration `Atan2` (38 ns) used as a proxy here.
+
+What this benchmark *does* establish: **the primitives are not the wall.** Risk 1's correctness half
+is retired (verified cross-OS); the performance half now has endpoints. Finding the point between
+them requires, in order:
+
+1. **Tick loop + scheduler**
+2. **Validity horizons + invalidation order** (§2.3 r8)
+3. **Reception root-find as a real loop**
+4. …after which the benchmark completes itself — it reads the two numbers off a running sim.
 
 ## Caveats
 
