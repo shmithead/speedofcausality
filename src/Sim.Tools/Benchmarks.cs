@@ -1,6 +1,9 @@
 using System.Diagnostics;
+using Sim.Core.Comms;
+using Sim.Core.Horizons;
 using Sim.Core.Numerics;
 using Sim.Core.Orbits;
+using Sim.Core.Time;
 
 namespace Sim.Tools;
 
@@ -60,12 +63,150 @@ internal static class Benchmarks
         Console.WriteLine($"Brewer mode (every entity solved every tick):  {brewer,10:F2} sim-years/min   -> 50-yr soak {SoakMinutes(brewer)}");
         Console.WriteLine($"Rails mode  (every entity a table lookup):     {rails,10:F2} sim-years/min   -> 50-yr soak {SoakMinutes(rails)}");
         Console.WriteLine();
-        Console.WriteLine("Both rows are FLOORS, not bounds. The real rate is BELOW rails: real ticks have");
-        Console.WriteLine("decision points (~30x a lookup), and their fraction is the horizon system's output.");
-        Console.WriteLine("Gate: does the horizon calculation cost less than the solves it saves? Not yet");
-        Console.WriteLine("measurable here -- a proxy has no horizons. Horizons are the rest of the benchmark.");
+        Console.WriteLine("Both rows are FLOORS, not bounds. The real rate is BELOW rails, but the horizon");
+        Console.WriteLine("system decides HOW far below by how rarely entities actually decide. Measured now:");
+        Console.WriteLine();
+
+        // --- The real §2.7 numbers, off the actual scheduler + horizon + reception machinery ---
+        double recvClosedRate = MeasureReceptionClosedForm();
+        double recvSolveRate = MeasureReceptionSolve(el);
+
+        Console.WriteLine("=== reception cost (light-lag core, §2.2) ===");
+        Report("Reception.ClosedForm (on-rails endpoint)", recvClosedRate);
+        Report("Reception.Solve      (moving endpoint)  ", recvSolveRate);
+
+        const double frameBudgetSec = 1.0 / 60.0; // one 60 fps frame
+        Console.WriteLine($"  ship-observers per in-scope event @ 60fps: {recvClosedRate * frameBudgetSec,10:N0} on-rails  |  {recvSolveRate * frameBudgetSec,8:N0} deciding");
+        Console.WriteLine();
+
+        // Run a real horizon-driven sim: 200 ships, each re-deciding on a stated cadence, each
+        // decision doing an actual Kepler solve + reception root-find. Measure it end to end.
+        const long cadenceSeconds = 40L * 24 * 3600;   // a ship re-decides ~every 40 days (assumption)
+        const int simYears = 20;
+        long span = simYears * SimYearSeconds;
+        var sw = Stopwatch.StartNew();
+        long decisions = RunDecidingHorizonSim(el, Ships, cadenceSeconds, span);
+        sw.Stop();
+
+        double horizonSimYearsPerMin = simYears / sw.Elapsed.TotalMinutes;
+        double decisionsPerYear = decisions / (double)simYears;
+        double decisionTickFraction = decisionsPerYear / TicksPerSimYear;
+
+        Console.WriteLine($"=== horizon-driven sim ({Ships} ships, ~40-day decide cadence, {simYears} sim-years) ===");
+        Console.WriteLine($"  fraction of ticks touching a decision point:  {decisionTickFraction,10:P3}");
+        Console.WriteLine($"  measured rate (scheduler+horizon+solve):      {horizonSimYearsPerMin,10:F1} sim-years/min   -> 50-yr soak {SoakMinutes(horizonSimYearsPerMin)}");
+        Console.WriteLine();
+        Console.WriteLine("Gate answer (this workload): the horizon calc (next = now + cadence) is trivial and");
+        Console.WriteLine("decisions are rare, so the sim runs FAR above rails. The load-bearing assumption is");
+        Console.WriteLine("the decide cadence + that the real 'earliest thing that could change her mind' query");
+        Console.WriteLine("stays cheap (a scheduler peek, not a solve) once comms/rumor drive it. That is Phase 1+.");
         return 0;
     }
+
+    // ---- reception & horizon measurements (the real §2.7 machinery) ----
+
+    private static double MeasureReceptionClosedForm()
+    {
+        const int warm = 100_000;
+        const int n = 5_000_000;
+        long sink = 0;
+        for (int i = 0; i < warm; i++)
+        {
+            sink += Reception.ClosedForm(149_597_870_700_000L + i, 20_000_000_000L, 0, 0, 0, 0, i);
+        }
+
+        var sw = Stopwatch.StartNew();
+        for (int i = 0; i < n; i++)
+        {
+            sink += Reception.ClosedForm(149_597_870_700_000L + i, 20_000_000_000L, 0, 0, 0, 0, i);
+        }
+
+        sw.Stop();
+        Consume(sink);
+        return n / sw.Elapsed.TotalSeconds;
+    }
+
+    private static double MeasureReceptionSolve(KeplerianElements el)
+    {
+        (long X, long Y, long Z) ObserverAt(long t)
+        {
+            Vec3 p = Kepler.PositionAt(el, t);
+            return (EphemerisTable.GmToMm(p.X), EphemerisTable.GmToMm(p.Y), EphemerisTable.GmToMm(p.Z));
+        }
+
+        const int warm = 20_000;
+        const int n = 500_000;
+        long sink = 0;
+        for (int i = 0; i < warm; i++)
+        {
+            sink += Reception.Solve(ObserverAt, 0, 0, 0, i * 3600L);
+        }
+
+        var sw = Stopwatch.StartNew();
+        for (int i = 0; i < n; i++)
+        {
+            sink += Reception.Solve(ObserverAt, 0, 0, 0, i * 3600L);
+        }
+
+        sw.Stop();
+        Consume(sink);
+        return n / sw.Elapsed.TotalSeconds;
+    }
+
+    // A ship that, at each horizon expiry, does a real decision (Kepler position + reception
+    // root-find against the Sun) and re-arms one cadence later.
+    private sealed class DecidingShip : HorizonEntity
+    {
+        private readonly long _cadence;
+        private readonly KeplerianElements _el;
+        public long Sink;
+
+        public DecidingShip(long id, long cadence, long firstHorizon, KeplerianElements el)
+            : base(id, firstHorizon)
+        {
+            _cadence = cadence;
+            _el = el;
+        }
+
+        protected override long Recompute(ISimContext ctx)
+        {
+            long now = ctx.NowSeconds;
+            (long X, long Y, long Z) ObserverAt(long t)
+            {
+                Vec3 p = Kepler.PositionAt(_el, t);
+                return (EphemerisTable.GmToMm(p.X), EphemerisTable.GmToMm(p.Y), EphemerisTable.GmToMm(p.Z));
+            }
+
+            Sink += Reception.Solve(ObserverAt, 0, 0, 0, now);
+            return now + _cadence;
+        }
+    }
+
+    private static long RunDecidingHorizonSim(KeplerianElements el, int ships, long cadence, long span)
+    {
+        var sim = new Simulation();
+        var mgr = new HorizonManager(sim);
+        var fleet = new DecidingShip[ships];
+        for (int i = 0; i < ships; i++)
+        {
+            long first = 1 + (((long)i * 7919) % cadence); // stagger so they don't all decide at once
+            fleet[i] = new DecidingShip(i, cadence, first, el);
+            mgr.Register(fleet[i]);
+        }
+
+        sim.RunUntil(span);
+
+        long total = 0;
+        foreach (DecidingShip s in fleet)
+        {
+            total += s.RecomputeCount;
+            Consume(s.Sink);
+        }
+
+        return total;
+    }
+
+    private const long SimYearSeconds = 31_557_600L;
 
     // sim-years/min = 60 * rate / (entities * ticksPerYear), assuming one op per entity per tick.
     private static double SimYearsPerMinute(double opsPerSec)
