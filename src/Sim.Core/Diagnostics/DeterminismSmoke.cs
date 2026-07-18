@@ -45,11 +45,15 @@ public static class DeterminismSmoke
         {
             state = NextState(state);
 
-            // Map to a whole number in [1, 1000], then walk it through the portable ops.
+            // Map to a whole number in [1, 1000], then walk it through the deterministic ops:
+            // sqrt, then CORDIC sin/cos (root exceeds one period, so range reduction runs too),
+            // then atan2. If any of those diverge cross-OS, this accumulator diverges.
             int n = (int)(state % 1000UL) + 1;
             Fixed64 x = Fixed64.FromInt(n);
             Fixed64 root = Fixed64.Sqrt(x);
-            acc += root * Fixed64.Half;
+            (Fixed64 sin, Fixed64 cos) = Trig.SinCos(root);
+            Fixed64 angle = Trig.Atan2(sin, x);
+            acc += (root * Fixed64.Half) + sin + cos + angle;
 
             outputs[i] = acc.Raw;
         }
