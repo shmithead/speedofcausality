@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Sim.Core/Sim.Core.csproj" />
+    <Project Path="src/Sim.Persistence/Sim.Persistence.csproj" />
     <Project Path="src/Sim.Tests/Sim.Tests.csproj" />
     <Project Path="src/Sim.Tools/Sim.Tools.csproj" />
   </Folder>

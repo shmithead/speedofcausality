@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Sim.Persistence</RootNamespace>
+    <!-- The IO layer (roadmap §4): SQLite + MessagePack. Deliberately NOT under the Sim.Core
+         analyzer bans — persistence is where System.IO legitimately lives. -->
+
+    <!-- Keep NuGet security advisories VISIBLE as build warnings, but non-fatal for this project.
+         MessagePack's current release and the SQLite native lib carry advisories with no patched
+         version available (as of 2026-07-18). Accepted risk, documented below. -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="MessagePack" />
+  </ItemGroup>
+
+  <!--
+    Accepted, documented security posture (no patched version available at latest as of 2026-07-18).
+    Threat model: this store is a LOCAL, single-user save file. It only ever deserializes event data
+    this application itself wrote; there is no network path and no untrusted input. The MessagePack
+    advisories concern deserializing untrusted/malicious payloads, which does not apply here. The
+    SQLite native advisory is inherent to using SQLite at all. Advisories remain VISIBLE as build
+    warnings (see WarningsNotAsErrors above) — re-evaluate and tighten when patched packages ship.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Sim.Core\Sim.Core.csproj" />
+  </ItemGroup>
+
+</Project>

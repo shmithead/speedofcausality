@@ -18,12 +18,20 @@ Landed so far:
 - `Trig` — deterministic **CORDIC** sin/cos/atan2 (32 iterations), cross-checked vs `System.Math` to <2e-6.
 - `Kepler` — closed-form orbital position on the fixed-point solver (mean → eccentric anomaly → inertial frame).
 - `EphemerisTable` — one-period integer (mm) table + interpolation; "trig becomes a memory read" (§2.7).
-- Determinism-smoke canary (now covering sqrt + trig) + committed golden (§2.6).
-- `simtool` — headless CLI (`run` / `dump` / `diff` with first-divergence locator, §4).
+- Discrete-event `Scheduler` + `SimClock`, and **validity horizons** with an invalidation graph (§2.7).
+- `Reception` — the light-lag core: closed-form + moving-endpoint root-find (§2.2).
+- Seeded per-subsystem **RNG streams** (xoshiro256\*\*, §2.3 r4).
+- **Event sourcing**: append-only `EventLog`, causal parents, fold-to-state, schema upcasting (§2.1, §2.6).
+- `Sim.Persistence` — SQLite event store, MessagePack payload blobs, snapshots (§2.1).
+- Determinism-smoke canary (sqrt + trig + rng) + committed golden (§2.6).
+- `simtool` — headless CLI (`run` / `dump` / `diff`, `bench`), first-divergence locator (§4).
 - CI on Windows **and** Linux with a cross-OS byte-identical gate (§5).
 
-Next: **validity horizons + invalidation graph** (§2.7, the organizing principle) and the
-**Brewer compute benchmark** — plus real Sol-body element data to drive the ephemeris.
+**The Brewer compute gate is answered** (`simtool bench`, [docs/benchmark-phase0.md](docs/benchmark-phase0.md)):
+~2,700 sim-years/min horizon-driven, 0.35% of ticks touch a decision point.
+
+Phase 0 is essentially complete. Next: Phase 1 — knowledge folds + message propagation at c, two
+settlements, one ship (plus real Sol-body element data for the ephemeris).
 
 ## Layout
 
