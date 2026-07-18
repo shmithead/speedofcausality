@@ -18,8 +18,30 @@ public static class Kepler
     /// Solves Kepler's equation <c>M = E − e·sin(E)</c> for the eccentric anomaly <c>E</c>,
     /// via a fixed number of Newton steps.
     /// </summary>
+    /// <remarks>
+    /// <para><b>Valid for bound orbits only: 0 ≤ e &lt; 1.</b> This is the elliptical form.</para>
+    /// <para><b>Conditioning degrades as e → 1.</b> The Newton denominator is
+    /// <c>f′ = 1 − e·cos(E)</c>, which approaches 0 near periapsis (E ≈ 0) for high eccentricity —
+    /// ~100× amplification at e = 0.99, ~1000× at e = 0.999. In fixed-point, dividing by a
+    /// near-zero <c>f′</c> yields a large quotient and can overflow. Planets are safe (e ≤ ~0.21;
+    /// Mercury is the worst in-system case). A Halley-type / near-parabolic object (e → 1) needs a
+    /// different formulation (e.g. universal variables) — do not just raise the iteration count.</para>
+    /// <para>The fixed iteration count is deliberate (§2.3): "iterate until converged" is a
+    /// cross-platform variance bug. For planetary e this converges by ~4–5 steps; the remaining
+    /// steps are slack that also absorbs the ±1-ULP limit cycle fixed-point Newton can settle into.
+    /// Do not trim the count as an optimization — that slack is load-bearing.</para>
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">If <paramref name="eccentricity"/> is
+    /// negative or ≥ 1 (not a bound elliptical orbit).</exception>
     public static Fixed64 SolveEccentricAnomaly(Fixed64 meanAnomaly, Fixed64 eccentricity)
     {
+        if (eccentricity < Fixed64.Zero || eccentricity >= Fixed64.One)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(eccentricity),
+                "Elliptical Kepler solver requires 0 <= e < 1. Near-parabolic/hyperbolic orbits need a different formulation.");
+        }
+
         Fixed64 e = eccentricity;
         Fixed64 m = meanAnomaly;
         Fixed64 eccentric = m; // initial guess

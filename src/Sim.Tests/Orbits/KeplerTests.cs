@@ -107,6 +107,16 @@ public sealed class KeplerTests
         }
     }
 
+    [Theory]
+    [InlineData(1.0)]   // parabolic — not a bound orbit
+    [InlineData(1.5)]   // hyperbolic
+    [InlineData(-0.1)]  // nonsensical
+    public void SolveEccentricAnomaly_Rejects_Unbound_Eccentricity(double e)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => Kepler.SolveEccentricAnomaly(Fixed64.One, Fixed64.FromDouble(e)));
+    }
+
     [Fact]
     public void Circular_Equatorial_Orbit_Has_Constant_Radius()
     {
