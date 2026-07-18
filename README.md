@@ -15,12 +15,15 @@ Landed so far:
 
 - `Sim.Core` — pure, deterministic sim library. No Godot, no IO, no `System.Math` (enforced, not by discipline).
 - `Fixed64` — Q32.32 fixed-point scalar with deterministic integer `Sqrt` (roadmap §2.5).
-- Determinism-smoke canary + committed golden (§2.6).
+- `Trig` — deterministic **CORDIC** sin/cos/atan2 (32 iterations), cross-checked vs `System.Math` to <2e-6.
+- `Kepler` — closed-form orbital position on the fixed-point solver (mean → eccentric anomaly → inertial frame).
+- `EphemerisTable` — one-period integer (mm) table + interpolation; "trig becomes a memory read" (§2.7).
+- Determinism-smoke canary (now covering sqrt + trig) + committed golden (§2.6).
 - `simtool` — headless CLI (`run` / `dump` / `diff` with first-divergence locator, §4).
 - CI on Windows **and** Linux with a cross-OS byte-identical gate (§5).
 
-Next: the fixed-point **CORDIC trig library** (the highest-risk Phase 0 item), then Keplerian
-orbits precomputed to an integer ephemeris table, validity horizons, and the compute benchmark.
+Next: **validity horizons + invalidation graph** (§2.7, the organizing principle) and the
+**Brewer compute benchmark** — plus real Sol-body element data to drive the ephemeris.
 
 ## Layout
 
