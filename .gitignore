@@ -1,0 +1,49 @@
+# ---- .NET ----
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+.vs/
+project.lock.json
+artifacts/
+[Tt]est[Rr]esults/
+*.trx
+*.coverage
+*.coveragexml
+
+# ---- Godot 4 (C#/Mono) ----
+.godot/
+.import/
+export.cfg
+export_presets.cfg
+*.translation
+# Godot generated C# artifacts
+mono_crash.*.json
+
+# ---- SQLite (sim event store lives in-repo only as fixtures) ----
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# ---- Editor / OS ----
+.idea/
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+*.swp
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# ---- Rider ----
+_ReSharper*/
+*.DotSettings.user
+
+# ---- Local secrets / env ----
+*.local
+.env
