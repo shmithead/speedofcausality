@@ -26,6 +26,7 @@ internal static class Program
                 "run" => Run(args),
                 "dump" => Dump(args),
                 "diff" => Diff(args),
+                "bench" => Benchmarks.Run(),
                 "-h" or "--help" or "help" => Usage(),
                 _ => Fail($"unknown command '{args[0]}'"),
             };
@@ -128,6 +129,7 @@ internal static class Program
               run    --seed <n> --steps <n> [--out <file>]   deterministic trace
               dump   <file>                                  print a trace
               diff   <a> <b>                                 first divergence between two traces
+              bench                                          Brewer compute gate (§2.7)
             """);
         return 0;
     }
