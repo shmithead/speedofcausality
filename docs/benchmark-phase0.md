@@ -93,3 +93,44 @@ solves it saves? — is answered YES for this workload.**
   That is the §2.7 failure mode to guard, and it is now the thing to watch in Phase 1+.
 - Single machine, single thread. Rule 5 forbids threading *within* a tick; replays parallelize
   *across* runs, so per-replay single-thread is the correct unit.
+
+---
+
+## Peak-tick correlation stress (`simtool bench-peak`)
+
+The average is not the risk. Everything expensive here comes from **simultaneity, not frequency**:
+200 ships deciding every 10 days *decorrelated* is cheap and spread out; 200 deciding on the **same
+tick** because one routed report reached a fleet at once is the same average, a catastrophically
+different peak — and a headless average hides it. This harness measures the **worst single tick**.
+
+**Honest scope:** real correlation is produced by signal routing / precursor cascades not built until
+Phase 3. This harness *synthesizes* correlation by assumption and measures the **engine's ceiling**
+(how many simultaneous decisions before a tick blows a frame budget), not whether the game *generates*
+that load. A floor of confidence, not a verdict. It applies no horizon collapse or solver warm-start
+on the peak path — the raw ceiling, deliberately.
+
+**ρ-sweep (fixed 10-day cadence, 200 ships) — the whole thesis in one table:**
+
+| ρ (correlated fraction) | max decisions / tick | peak-tick ms | throughput (sim-yr/min) |
+|---:|---:|---:|---:|
+| 0.00 | 1 | 0.01 | ~660 |
+| 0.25 | 50 | 0.63 | ~690 |
+| 0.50 | 100 | 1.13 | ~830 |
+| 0.75 | 150 | 1.76 | ~940 |
+| 1.00 | 200 | 2.21 | ~1040 |
+
+Throughput barely moves; the peak tick climbs ~220× across the same runs. **Correlation, not
+frequency, is the risk.** The decorrelated cadence-sweep (ρ=0, cadence 40d→1d) confirms the contrast:
+max/tick stays 1 and peak-tick stays ~0.01 ms while throughput degrades smoothly — the average axis
+is not the risk.
+
+**The engine ceiling (i7-12700K, pessimistic solve, no horizon collapse):** per decision ≈ 11.5 µs, so
+one tick absorbs **K ≈ 1,400 simultaneous decisions under 16.7 ms (60 fps)**, and ≈ 700 under 8.3 ms
+(120 fps). The N-sweep confirms the curve is linear (N=1000 → 11.4 ms).
+
+**Phase 3 design constraint, known before it's built:** *signal routing must not fan a single report
+out to more than ~1,400 in-scope decisions on one tick without batching or staggering, or an
+interactive frame drops.* This is now a hard constraint on the broadcast/rumor system — and because
+the peak path here is the pessimistic one (full Kepler per bisection step), the on-rails-lookup
+collapse and warm-start raise that ceiling further when applied. The real verdict is a Phase 3
+measurement against the actual information graph; this sets the floor.

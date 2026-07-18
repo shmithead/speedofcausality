@@ -27,6 +27,7 @@ internal static class Program
                 "dump" => Dump(args),
                 "diff" => Diff(args),
                 "bench" => Benchmarks.Run(),
+                "bench-peak" => BenchPeak.Run(args),
                 "-h" or "--help" or "help" => Usage(),
                 _ => Fail($"unknown command '{args[0]}'"),
             };
@@ -130,6 +131,7 @@ internal static class Program
               dump   <file>                                  print a trace
               diff   <a> <b>                                 first divergence between two traces
               bench                                          Brewer compute gate (§2.7)
+              bench-peak [--sweep n|rho|cadence] ...          peak-tick correlation stress
             """);
         return 0;
     }
