@@ -1,5 +1,6 @@
 using System.Text;
 using Sim.Core.Numerics;
+using Sim.Core.Rng;
 
 namespace Sim.Core.Diagnostics;
 
@@ -41,19 +42,23 @@ public static class DeterminismSmoke
         var outputs = new long[steps];
         Fixed64 acc = Fixed64.Zero;
 
+        // A seeded RNG stream folded in too, so a cross-OS divergence in the PRNG trips the canary.
+        var rng = new RngStreams(seed).Fork("determinism-smoke");
+
         for (int i = 0; i < steps; i++)
         {
             state = NextState(state);
 
             // Map to a whole number in [1, 1000], then walk it through the deterministic ops:
             // sqrt, then CORDIC sin/cos (root exceeds one period, so range reduction runs too),
-            // then atan2. If any of those diverge cross-OS, this accumulator diverges.
+            // then atan2, plus a bounded RNG draw. If any of those diverge cross-OS, this diverges.
             int n = (int)(state % 1000UL) + 1;
             Fixed64 x = Fixed64.FromInt(n);
             Fixed64 root = Fixed64.Sqrt(x);
             (Fixed64 sin, Fixed64 cos) = Trig.SinCos(root);
             Fixed64 angle = Trig.Atan2(sin, x);
-            acc += (root * Fixed64.Half) + sin + cos + angle;
+            Fixed64 roll = Fixed64.FromInt((int)rng.NextBounded(360));
+            acc += (root * Fixed64.Half) + sin + cos + angle + roll;
 
             outputs[i] = acc.Raw;
         }
