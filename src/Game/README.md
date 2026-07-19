@@ -25,8 +25,13 @@ godot --path src/Game
 
 - **Space** — pause / resume time
 - **+ / −** — speed up / slow down compression
-- **C** — order the player's freighter to divert to Ceres (a countermand: it travels at c and only
-  takes effect when it reaches the ship — watch the ghost react a lag later)
+- **1 / 2 / 3** — order the player's freighter to Earth-HQ / Mars / Ceres. The order is a countermand:
+  it travels at c and only takes effect when it reaches the ship. The "order in flight" banner shows
+  the travel time and delivery ETA; watch the ghost react a lag *after* delivery. (In-flight only —
+  a docked ship can't be countermanded yet.)
+
+The HUD also shows the live **one-way signal lag from HQ** to each port, and prices/ghosts now report
+staleness in hours/minutes so a sub-day light-lag is actually visible.
 
 ## What you're looking at (the render rule)
 
