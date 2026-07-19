@@ -1,10 +1,12 @@
 # Speed of Causality
 
-Sol-system logistics sim — light-lag command, autonomous captains, mortal NPCs, purchasable legality.
+Sol-system logistics sim — **information-lag** command, autonomous captains, mortal NPCs, purchasable legality.
 
-The design principle everything else serves: **first light is the floor.** No channel — sensor,
-relay, rumor, or market — delivers information about an event faster than light can travel from it.
-See [docs/technical-roadmapv3.md](docs/technical-roadmapv3.md) (canonical).
+The speed limit is causality, not light: `c` is the speed of the fastest possible *signal* of any kind.
+The design principle everything else serves: **first light is the floor** — no channel (sensor, relay,
+rumor, or market) delivers information about an event before a signal from it could arrive, and **every
+signal has a sender** (nothing radiates for free; the screen never shows what nobody sent).
+See [docs/technical-roadmap.md](docs/technical-roadmap.md) (canonical; superseded drafts in `docs/archive/`).
 
 ## Status
 
