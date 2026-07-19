@@ -1,4 +1,4 @@
-; Godot 4.4 project (C#). Frontend for the Speed of Causality sim (roadmap §1, §5).
+; Godot 4.7 project (C#). Frontend for the Speed of Causality sim (roadmap §1, §5).
 ; The sim itself lives in ../Sim.Core (engine-free); this project references it.
 
 config_version=5
@@ -7,7 +7,7 @@ config_version=5
 
 config/name="Speed of Causality"
 run/main_scene="res://Main.tscn"
-config/features=PackedStringArray("4.4", "C#", "Forward Plus")
+config/features=PackedStringArray("4.7", "C#", "Forward Plus")
 config/icon="res://icon.svg"
 
 [dotnet]

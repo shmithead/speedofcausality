@@ -24,7 +24,7 @@ namespace SpeedOfCausality.Game;
 /// </list></para>
 ///
 /// <para>This environment cannot run Godot, so this script is unverified in-engine — open it in
-/// Godot 4.4+ locally. The sim logic it calls is fully tested in Sim.Tests.</para>
+/// Godot 4.7+ locally. The sim logic it calls is fully tested in Sim.Tests.</para>
 /// </summary>
 public partial class StrategicMap : Node2D
 {

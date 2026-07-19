@@ -1,4 +1,4 @@
-# Game — Phase 1 strategic map (Godot 4.4, C#)
+# Game — Phase 1 strategic map (Godot 4.7, C#)
 
 The frontend for Speed of Causality. It drives the headless simulation in
 [`../Sim.Core`](../Sim.Core) and renders **only the player's knowledge fold** (roadmap §2.2, §5) —
@@ -10,7 +10,7 @@ its projections (`KnowledgeProjection`, `PriceBook`, `ShipView`) and draws them.
 This project is **not** part of `SpeedOfCausality.slnx` — CI builds and tests the sim without a Godot
 SDK. Open it separately:
 
-1. Install **Godot 4.4 (.NET/Mono build)** and a .NET 8 SDK.
+1. Install **Godot 4.7 (.NET/Mono build)** and a .NET SDK.
 2. Open `src/Game/project.godot` in the Godot editor (it restores `Sim.Core` via the project
    reference and generates the C# glue on first build).
 3. Press **F5** to run `Main.tscn`.
