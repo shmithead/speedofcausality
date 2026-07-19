@@ -14,4 +14,11 @@ public interface IPriceSource
 
     /// <summary>Which commodity this market prices.</summary>
     int CommodityId { get; }
+
+    /// <summary>
+    /// The deterministic price at sim-time <paramref name="tSeconds"/>. Sampling at <c>now − lightTime</c>
+    /// yields the light-delayed feed a distant observer holds (§2.2) — a continuously updating quote that
+    /// is exactly as old as the geometry between observer and port.
+    /// </summary>
+    long PriceAt(long tSeconds);
 }

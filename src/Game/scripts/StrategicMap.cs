@@ -1,6 +1,5 @@
 using Godot;
 using Sim.Core.Diagnostics;
-using Sim.Core.Economy;
 using Sim.Core.Knowledge;
 using Sim.Core.Ships;
 using Sim.Core.World;
@@ -348,28 +347,23 @@ public partial class StrategicMap : Node2D
             $"T+{now / Day}d   {FmtRate(_timeScale)}{(_paused ? "  [PAUSED]" : "")}{(_following ? "  [FOLLOWING ORDER]" : "")}   Credits: {_world.Credits:N0}",
             HorizontalAlignment.Left, -1, 14, Colors.White);
 
+        // The live Ore feed, received light-delayed: the price as it was |HQ-port|/c ago, updating
+        // continuously (§2.2). What you route on — the true price at the port when a ship arrives may
+        // have moved.
         line.Y += 26;
-        DrawString(font, line, "Ore prices (last known):", HorizontalAlignment.Left, -1, 13, new Color(0.8f, 0.8f, 0.85f));
-        foreach ((long settlementId, PriceQuote q) in PriceBook.Read(_world.Knowledge, ObserverId, now))
+        DrawString(font, line, "Ore feed (light-delayed):", HorizontalAlignment.Left, -1, 13, new Color(0.8f, 0.8f, 0.85f));
+        foreach ((long body, long port, Color _c, string name) in Worlds)
         {
-            line.Y += 18;
-            DrawString(font, line + new Vector2(12, 0),
-                $"{PortName(settlementId)}: {q.PriceMinorUnits}  (heard {FmtAge(q.AgeSeconds(now))} ago)",
-                HorizontalAlignment.Left, -1, 12, new Color(0.75f, 0.85f, 0.8f));
-        }
-
-        line.Y += 26;
-        DrawString(font, line, "signal lag from HQ (one way):", HorizontalAlignment.Left, -1, 13, new Color(0.8f, 0.8f, 0.85f));
-        foreach ((long body, long _port, Color _c, string name) in Worlds)
-        {
-            if (body == SolSystem.EarthId)
+            if (!_world.TryGetMarket(port, out IPriceSource market))
             {
                 continue;
             }
 
+            double lag = LightSeconds(SolSystem.EarthId, body, now);
+            long price = market.PriceAt(now - (long)lag);
             line.Y += 18;
-            DrawString(font, line + new Vector2(12, 0), $"{name}: {FmtLight(LightSeconds(SolSystem.EarthId, body, now))}",
-                HorizontalAlignment.Left, -1, 12, new Color(0.75f, 0.8f, 0.9f));
+            DrawString(font, line + new Vector2(12, 0), $"{name}: {price}  ({FmtLight(lag)} old)",
+                HorizontalAlignment.Left, -1, 12, new Color(0.75f, 0.85f, 0.8f));
         }
 
         DrawOrderBanner(now, font);

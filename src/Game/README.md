@@ -50,8 +50,11 @@ gap → ghost reacts.
   exactly when the plan is wrong) and a **grey ghost** (its last arrived SITREP, one light-lag stale);
   a ghost off its plan turns **red** (deviation, §3). A **docked** ship is labeled at its port, because
   HQ heard it arrive.
-- **Ore prices** and ghosts are last-known values with their age — as stale as the geometry makes them.
-- Markets at **Mars** and **Ceres**; the light-lag to each is shown live in the HUD.
+- The **Ore feed** shows each market's price *light-delayed* — the value as it was `|HQ-port|/c` ago,
+  updating continuously (Mars ~18 light-min behind, Ceres ~31). Ghosts are last-known telemetry with
+  their age. Both are as stale as the geometry makes them, and the true price at a port when your ship
+  arrives may have moved — that gap is the trade.
+- Markets at **Mars** and **Ceres**; each feed line shows how old that quote is.
 
 The only packet drawn is **your own outgoing order**, shown as a prediction — you know you sent it, at
 c, toward where you believe the ship is. That is legal (a prediction from what HQ knows), unlike drawing
