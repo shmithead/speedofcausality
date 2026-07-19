@@ -21,4 +21,7 @@ internal static class Ordinals
 
     /// <summary>Ship arrival pings: ordinal = <see cref="Arrival"/> + ship id.</summary>
     public const long Arrival = 1L << 53;
+
+    /// <summary>Scripted-route departures: ordinal = <see cref="ScriptedDeparture"/> + ship id.</summary>
+    public const long ScriptedDeparture = 1L << 54;
 }

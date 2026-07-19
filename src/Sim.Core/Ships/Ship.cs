@@ -20,10 +20,14 @@ namespace Sim.Core.Ships;
 /// </summary>
 public sealed class Ship : ISpatial
 {
+    /// <summary>Sentinel origin for a leg begun mid-flight (a countermand diversion has no departure settlement).</summary>
+    public const long InTransit = -1;
+
     private readonly SimWorld _world;
     private readonly Trajectory _trajectory;
-    private readonly long _departSettlementId;
     private readonly long _nominalTransferSeconds;
+
+    private long _departSettlementId;
 
     private long _fuelMmPerSec;
     private long _destSettlementId;
@@ -96,29 +100,47 @@ public sealed class Ship : ISpatial
             throw new ArgumentOutOfRangeException(nameof(arriveSeconds), "Arrival must be after departure.");
         }
 
+        // Construct docked at rest on the departure settlement; the departure burn is the first commit,
+        // so departure, countermand, and scripted re-file all run through one code path (CommitTo).
         (long px, long py, long pz) = world.EntitySpatial(departSettlementId).PositionMmAt(departSeconds);
-        (long vx, long vy, long vz) = InterceptVelocity(
-            world, destSettlementId, px, py, pz, departSeconds, arriveSeconds);
-
-        var trajectory = new Trajectory(new Trajectory.Leg(departSeconds, px, py, pz, vx, vy, vz));
-        long departureCost = IntMath.DistanceMm(0, 0, 0, vx, vy, vz); // burn from rest at the settlement
+        var trajectory = new Trajectory(new Trajectory.Leg(departSeconds, px, py, pz, 0, 0, 0));
         var ship = new Ship(
-            id, world, trajectory, fuelMmPerSec - departureCost,
+            id, world, trajectory, fuelMmPerSec,
             departSettlementId, destSettlementId, departSeconds, arriveSeconds);
 
         world.AddEntity(id, ship, isObserver: true);
-        world.Emit(id, new Telemetry(id, px, py, pz, vx, vy, vz, TelemetryCause.Departed));
-        world.Emit(id, new FlightPlanFiled(
-            id, departSettlementId, destSettlementId, departSeconds, arriveSeconds, px, py, pz, vx, vy, vz));
-        ship.ScheduleArrival();
+        ship.CommitTo(departSeconds, departSettlementId, destSettlementId, arriveSeconds, TelemetryCause.Departed, announcePlan: true);
         return ship;
     }
 
     /// <summary>
+    /// Files the next leg of a fixed itinerary: departs the settlement the ship is docked at for
+    /// <paramref name="destSettlementId"/>, arriving at <paramref name="arriveSeconds"/>. This is the
+    /// scripted competitor's driver (roadmap §5) — a plain re-departure that <i>announces</i> a fresh
+    /// plan, unlike a countermand (which goes dark). The world clock must be at the departure instant.
+    /// </summary>
+    public void FileNextLeg(long destSettlementId, long arriveSeconds)
+    {
+        long now = _world.NowSeconds;
+        if (arriveSeconds <= now)
+        {
+            throw new ArgumentOutOfRangeException(nameof(arriveSeconds), "Arrival must be after departure.");
+        }
+
+        CommitTo(now, _destSettlementId, destSettlementId, arriveSeconds, TelemetryCause.Departed, announcePlan: true);
+    }
+
+    /// <summary>
     /// The player's countermand, delivered: recomputes an intercept for
-    /// <paramref name="newDestSettlementId"/> from wherever the ship is now, burns onto it, and refiles.
-    /// A no-op if the ship has already arrived — the order came too late (§5). Invoked from the
-    /// scheduled reception callback, so "now" is the reception instant, never earlier (§2.2).
+    /// <paramref name="newDestSettlementId"/> from wherever the ship is now and burns onto it. A no-op
+    /// if the ship has already arrived — the order came too late (§5). Invoked from the scheduled
+    /// reception callback, so "now" is the reception instant, never earlier (§2.2).
+    ///
+    /// <para>Emits only telemetry — the ship goes dark on its old filed plan. A diverted ship that no
+    /// longer matches its announced plan IS the deviation (§3): the physics-delivered signal that
+    /// "something happened" reaches the player before any report explaining it. The player renders the
+    /// new intent as a live <i>prediction</i> (they ordered it — §5 permits drawing that), not from a
+    /// new filed plan the ship never transmitted.</para>
     /// </summary>
     public void ApplyCountermand(ISimContext ctx, long newDestSettlementId)
     {
@@ -128,26 +150,43 @@ public sealed class Ship : ISpatial
             return; // too late — first light was not fast enough
         }
 
+        // Phase 1 simplification: a diversion keeps the ship's original transfer duration (it pushes
+        // harder to hold a fixed schedule) rather than re-planning arrival from the new distance — the
+        // real transfer solver that would size this is Phase 2/3 (§3, "transfers are a precomputed
+        // table, not a live solve").
+        CommitTo(now, InTransit, newDestSettlementId, now + _nominalTransferSeconds, TelemetryCause.Countermanded, announcePlan: false);
+    }
+
+    // The one code path that puts the ship on a new intercept: burn onto the lead velocity for the
+    // destination, spend the fuel, restate the plan, and (re)schedule arrival. Whether it announces a
+    // filed plan is what separates a normal departure/re-file from a dark countermand diversion.
+    private void CommitTo(
+        long now, long originSettlementId, long destSettlementId, long arriveSeconds, TelemetryCause cause, bool announcePlan)
+    {
         (long cx, long cy, long cz) = _trajectory.PositionMmAt(now);
         (long pvx, long pvy, long pvz) = _trajectory.CurrentVelocity;
-
-        long newArrive = now + _nominalTransferSeconds;
-        (long nvx, long nvy, long nvz) = InterceptVelocity(
-            _world, newDestSettlementId, cx, cy, cz, now, newArrive);
+        (long nvx, long nvy, long nvz) = InterceptVelocity(_world, destSettlementId, cx, cy, cz, now, arriveSeconds);
 
         _trajectory.Burn(now, nvx - pvx, nvy - pvy, nvz - pvz);
+
+        // Phase 1: fuel is a budget spent per burn, not yet a hard constraint — it may go negative, and
+        // a ship never refuses an order for lack of delta-v. Enforcing it (refuse / strand) is Phase 2
+        // captain logic (§3 Agents), not the information-lag prototype.
         _fuelMmPerSec -= IntMath.DistanceMm(0, 0, 0, nvx - pvx, nvy - pvy, nvz - pvz);
-        _destSettlementId = newDestSettlementId;
+        _departSettlementId = originSettlementId;
+        _destSettlementId = destSettlementId;
         _departSeconds = now;
-        _arriveSeconds = newArrive;
+        _arriveSeconds = arriveSeconds;
+        _arrived = false;
         _generation++;
 
-        // Emit only telemetry — the ship goes dark on its old filed plan. A diverted ship that no
-        // longer matches its announced plan IS the deviation (§3): the physics-delivered signal that
-        // "something happened" reaches the player before any report explaining it. The player renders
-        // the new intent as a live *prediction* (they ordered it — §5 permits drawing that), not from
-        // a new filed plan the ship never transmitted.
-        _world.Emit(Id, new Telemetry(Id, cx, cy, cz, nvx, nvy, nvz, TelemetryCause.Countermanded));
+        _world.Emit(Id, new Telemetry(Id, cx, cy, cz, nvx, nvy, nvz, cause));
+        if (announcePlan)
+        {
+            _world.Emit(Id, new FlightPlanFiled(
+                Id, originSettlementId, destSettlementId, now, arriveSeconds, cx, cy, cz, nvx, nvy, nvz));
+        }
+
         ScheduleArrival();
     }
 
