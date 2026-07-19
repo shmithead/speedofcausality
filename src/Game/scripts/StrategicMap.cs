@@ -138,7 +138,9 @@ public partial class StrategicMap : Node2D
                 _timeScale *= 2.0;
                 break;
             case Key.Minus:
-                _timeScale = System.Math.Max(_timeScale / 2.0, Day / 4.0);
+                // Floor at 1 sim-minute/sec so you can slow right down to watch a packet cross the
+                // light-lag (minutes) — otherwise it blinks past at transfer-scale compression.
+                _timeScale = System.Math.Max(_timeScale / 2.0, 60.0);
                 break;
         }
     }
@@ -286,7 +288,7 @@ public partial class StrategicMap : Node2D
     private void DrawHud(long now, Font font)
     {
         var line = new Vector2(16, 24);
-        DrawString(font, line, $"T+{now / Day}d   x{_timeScale / Day:0.##}day/s{(_paused ? "  [PAUSED]" : "")}   Credits: {_world.Credits:N0}",
+        DrawString(font, line, $"T+{now / Day}d   {FmtRate(_timeScale)}{(_paused ? "  [PAUSED]" : "")}   Credits: {_world.Credits:N0}",
             HorizontalAlignment.Left, -1, 14, Colors.White);
 
         line.Y += 26;
@@ -478,6 +480,21 @@ public partial class StrategicMap : Node2D
 
     private static string FmtLight(double seconds)
         => seconds >= 90 ? $"{seconds / 60.0:0.0} light-min" : $"{seconds:0} light-sec";
+
+    private static string FmtRate(double secPerSec)
+    {
+        if (secPerSec >= Day)
+        {
+            return $"{secPerSec / Day:0.##} day/s";
+        }
+
+        if (secPerSec >= 3600)
+        {
+            return $"{secPerSec / 3600:0.##} hr/s";
+        }
+
+        return secPerSec >= 60 ? $"{secPerSec / 60:0.##} min/s" : $"{secPerSec:0} sec/s";
+    }
 
     private static string FmtAge(long seconds)
     {
