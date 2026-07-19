@@ -124,13 +124,20 @@ frequency, is the risk.** The decorrelated cadence-sweep (ρ=0, cadence 40d→1d
 max/tick stays 1 and peak-tick stays ~0.01 ms while throughput degrades smoothly — the average axis
 is not the risk.
 
-**The engine ceiling (i7-12700K, pessimistic solve, no horizon collapse):** per decision ≈ 11.5 µs, so
-one tick absorbs **K ≈ 1,400 simultaneous decisions under 16.7 ms (60 fps)**, and ≈ 700 under 8.3 ms
-(120 fps). The N-sweep confirms the curve is linear (N=1000 → 11.4 ms).
+**The engine ceiling — read it as a FLOOR.** Per decision ≈ 11.5 µs, so one tick absorbs
+**K ≈ 1,400 simultaneous decisions under 16.7 ms (60 fps)**, ≈ 700 under 8.3 ms. The N-sweep confirms
+the curve is linear (N=1000 → 11.4 ms). **But K is measured from a *warmed* batch** — cache-hot,
+zero-allocation, steady-state. A live correlated tick is cache-cold on that data, may allocate, and
+lands mid-GC with everything else the tick does, so the real spike is **higher, possibly by a lot**.
+K ≈ 1,400 is therefore the **floor** of peak-tick cost, not the conservative ceiling the spec asked
+for. (A true worst-case would force a GC and time the batch cold; we keep the warmed figure because
+it is stable and reproducible, and carry the cold-tick penalty as a safety margin instead.)
 
-**Phase 3 design constraint, known before it's built:** *signal routing must not fan a single report
-out to more than ~1,400 in-scope decisions on one tick without batching or staggering, or an
-interactive frame drops.* This is now a hard constraint on the broadcast/rumor system — and because
-the peak path here is the pessimistic one (full Kepler per bisection step), the on-rails-lookup
-collapse and warm-start raise that ceiling further when applied. The real verdict is a Phase 3
-measurement against the actual information graph; this sets the floor.
+**Phase 3 design constraint, known before it's built (floor + 2× margin):** *signal routing must not
+fan a single report out to more than **~700** in-scope decisions on one tick without batching or
+staggering, or an interactive frame drops.* That ~700 is half the ~1,400 warmed-batch floor, the 2×
+covering the unmeasured cold-tick penalty; treat ~1,400 as "definitely broken past here." Two forces
+move this later: the on-rails-lookup collapse and warm-start (deliberately omitted from the
+pessimistic peak path) raise the ceiling, while a real cold-tick measurement would pull the reported
+number down toward the true worst case. The verdict is a Phase 3 measurement against the actual
+information graph; this sets the floor.

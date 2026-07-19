@@ -88,13 +88,16 @@ public static class BenchPeak
                 return 2;
         }
 
-        // The whole point, in one sentence.
+        // The whole point, in one sentence — with the conservatism the spec asked for.
         int k16 = Ceiling(perDecisionMs, 16.7);
         int k8 = Ceiling(perDecisionMs, 8.3);
         Console.WriteLine();
-        Console.WriteLine($"VERDICT: engine absorbs up to ~{k16} simultaneous decisions before a tick exceeds 16.7 ms (60 fps),");
-        Console.WriteLine($"         and ~{k8} before it exceeds 8.3 ms (120 fps). Pessimistic solve, no horizon collapse.");
-        Console.WriteLine("This is the ENGINE ceiling, synthesized by assumption — not a claim the game generates this load.");
+        Console.WriteLine($"VERDICT (WARMED-BATCH FLOOR of peak-tick cost): ~{k16} decisions fit under 16.7 ms (60 fps),");
+        Console.WriteLine($"         ~{k8} under 8.3 ms (120 fps). Pessimistic solve, no horizon collapse.");
+        Console.WriteLine("But this batch is cache-hot / zero-alloc / steady-state. A LIVE correlated tick is cold, may");
+        Console.WriteLine("allocate, and lands mid-GC — the real spike is HIGHER, so this K is a floor, not a ceiling.");
+        Console.WriteLine($"=> DESIGN against ~{k16 / 2} simultaneous decisions (2x margin); treat ~{k16} as 'definitely broken past here'.");
+        Console.WriteLine("Engine ceiling synthesized by assumption — not a claim the game generates this load.");
         return 0;
     }
 
@@ -166,6 +169,18 @@ public static class BenchPeak
         return run.Counts;
     }
 
+    /// <summary>
+    /// Deterministic sequence of tick <b>times</b> for (config, seed). Unlike the count sequence
+    /// (which is seed-invariant when collisions are near-zero), tick times shift with the seeded
+    /// independent stagger — so this is the non-vacuous witness that the RNG genuinely drives the
+    /// schedule and reproduces it (§2.3 r4).
+    /// </summary>
+    public static long[] DecisionTickTimes(Config cfg)
+    {
+        var run = Drive(cfg, SampleBody(), doWork: false, measure: false);
+        return run.TickTimes;
+    }
+
     private static PeakResult Measure(Config cfg, KeplerianElements el)
     {
         DriveResult run = Drive(cfg, el, doWork: true, measure: true);
@@ -198,7 +213,7 @@ public static class BenchPeak
         return new PeakResult(maxDecisions, max, peakClean, p99, mean, totalDecisions, run.Counts.Length, throughput);
     }
 
-    private sealed record DriveResult(int[] Counts, double[] TickMs);
+    private sealed record DriveResult(int[] Counts, long[] TickTimes, double[] TickMs);
 
     private sealed class Sink
     {
@@ -229,6 +244,7 @@ public static class BenchPeak
         }
 
         var counts = new List<int>();
+        var times = new List<long>();
         var tickMs = measure ? new List<double>() : null;
         var sw = new Stopwatch();
 
@@ -253,10 +269,11 @@ public static class BenchPeak
             }
 
             counts.Add(decisions);
+            times.Add(t);
         }
 
         Consume(sink.Value);
-        return new DriveResult(counts.ToArray(), tickMs?.ToArray() ?? Array.Empty<double>());
+        return new DriveResult(counts.ToArray(), times.ToArray(), tickMs?.ToArray() ?? Array.Empty<double>());
     }
 
     private sealed class Decision : ISimEvent

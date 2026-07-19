@@ -10,9 +10,28 @@ public sealed class BenchPeakTests
         new(CorrelatedShips: 100, IndependentShips: 100, CadenceSeconds: Cadence, SpanSeconds: 5 * Cadence, Seed: seed);
 
     [Fact]
-    public void Per_Tick_Decision_Counts_Are_Deterministic()
+    public void Tick_Time_Sequence_Is_Reproducible_For_A_Seed()
     {
-        // The *work pattern* is deterministic (§2.3 r4); only wall-time varies by machine.
+        // Non-vacuous: tick times shift with the seeded stagger, so identical output across runs
+        // proves the RNG path actually reproduces (§2.3 r4) — not merely that a seed-invariant
+        // quantity is stable.
+        long[] first = BenchPeak.DecisionTickTimes(Config(42));
+        long[] second = BenchPeak.DecisionTickTimes(Config(42));
+        Assert.Equal(first, second);
+    }
+
+    [Fact]
+    public void Different_Seeds_Produce_Different_Tick_Times()
+    {
+        // Confirms the seed genuinely drives the schedule (the RNG isn't being ignored).
+        long[] a = BenchPeak.DecisionTickTimes(Config(1));
+        long[] b = BenchPeak.DecisionTickTimes(Config(2));
+        Assert.NotEqual(a, b);
+    }
+
+    [Fact]
+    public void Per_Tick_Decision_Counts_Are_Reproducible_For_A_Seed()
+    {
         int[] first = BenchPeak.DecisionCountsPerTick(Config(42));
         int[] second = BenchPeak.DecisionCountsPerTick(Config(42));
         Assert.Equal(first, second);
