@@ -1,0 +1,12 @@
+<Project>
+
+  <!--
+    Stops NuGet from importing the repo-root Directory.Packages.props (it uses the nearest one walking
+    up). The Godot.NET.Sdk sets implicit Versions on GodotSharp/Godot.SourceGenerators, which Central
+    Package Management forbids (NU1008), so this project opts out of CPM entirely.
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+</Project>

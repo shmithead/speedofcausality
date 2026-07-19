@@ -1,0 +1,9 @@
+# Godot 4 (C#) — editor caches and generated files
+.godot/
+.mono/
+data_*/
+*.import
+
+# .NET build output (also covered repo-wide, kept here for a standalone checkout)
+bin/
+obj/

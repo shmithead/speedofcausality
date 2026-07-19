@@ -1,0 +1,20 @@
+<Project Sdk="Godot.NET.Sdk/4.4.1">
+
+  <PropertyGroup>
+    <!--
+      Matches Sim.Core's net10.0 (a net10 project can still consume the net8 GodotSharp). If your local
+      Godot build pins .NET 8, either set this to net8.0 and multi-target Sim.Core (net8.0;net10.0), or
+      run a Godot .NET build on the .NET 10 SDK. The frontend has no verified in-engine run here.
+    -->
+    <TargetFramework>net10.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <Nullable>enable</Nullable>
+    <RootNamespace>SpeedOfCausality.Game</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- One-way dependency (roadmap §2 boundary): the frontend reads Sim.Core; Sim.Core never sees Godot. -->
+    <ProjectReference Include="../Sim.Core/Sim.Core.csproj" />
+  </ItemGroup>
+
+</Project>

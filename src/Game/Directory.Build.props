@@ -1,0 +1,23 @@
+<Project>
+
+  <PropertyGroup>
+    <!--
+      Opt out of the repo's Central Package Management (root Directory.Packages.props). MSBuild finds
+      that file by walking up independently of Directory.Build.props, and CPM forbids the implicit
+      Version values the Godot.NET.Sdk sets on GodotSharp/Godot.SourceGenerators (NU1008). The Godot
+      SDK manages its own package versions, so this project stays outside CPM.
+    -->
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <!--
+    Isolates the Godot frontend from the repo-root Directory.Build.props. MSBuild uses the FIRST
+    Directory.Build.props found walking up from a project, so this file stops the search here: the
+    root's net10.0 / TreatWarningsAsErrors / BannedApiAnalyzers settings target the pure Sim.Core and
+    must not be imposed on Godot-generated code. The Godot.NET.Sdk supplies this project's defaults.
+
+    Sim.Core stays engine-free (roadmap §1): the Game references it, never the reverse, and Game is
+    deliberately NOT part of SpeedOfCausality.slnx so CI can build/test the sim without a Godot SDK.
+  -->
+
+</Project>
