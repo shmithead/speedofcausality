@@ -46,7 +46,8 @@ public sealed class ScriptedRoute
         long[] stops,
         long legDurationSeconds,
         long dwellSeconds,
-        long fuelMmPerSec)
+        long fuelMmPerSec,
+        long sitrepIntervalSeconds = 0)
     {
         if (stops.Length < 2)
         {
@@ -58,7 +59,9 @@ public sealed class ScriptedRoute
             throw new ArgumentOutOfRangeException(nameof(legDurationSeconds), "Positive leg duration and non-negative dwell required.");
         }
 
-        Ship ship = Ship.Depart(world, shipId, stops[0], stops[1], world.NowSeconds + legDurationSeconds, fuelMmPerSec);
+        Ship ship = Ship.Depart(
+            world, shipId, stops[0], stops[1], world.NowSeconds + legDurationSeconds, fuelMmPerSec,
+            sitrepIntervalSeconds);
         var route = new ScriptedRoute(world, ship, stops, legDurationSeconds, dwellSeconds) { _nextOriginIndex = 1 };
         route.ScheduleNextDeparture(ship.ArriveSeconds);
         return route;

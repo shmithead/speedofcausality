@@ -29,12 +29,21 @@ public sealed class Ship : ISpatial
 
     private long _departSettlementId;
 
+    /// <summary>Straight-line cruise speed (mm/s) used to size a dispatch's ETA from distance (Phase 1, §3).</summary>
+    public const long CruiseMmPerSec = 40_000_000L; // 40 km/s
+
     private long _fuelMmPerSec;
     private long _destSettlementId;
     private long _departSeconds;
     private long _arriveSeconds;
     private int _generation;
     private bool _arrived;
+
+    private long _sitrepIntervalSeconds;
+    private bool _sitrepRunning;
+    private long _cargoUnits;
+    private long _cargoCapacity;
+    private bool _isPlayer;
 
     private Ship(
         long id,
@@ -75,6 +84,21 @@ public sealed class Ship : ISpatial
     /// <summary>True once the ship has reached its (current) destination.</summary>
     public bool Arrived => _arrived;
 
+    /// <summary>The settlement the ship is docked at, or -1 if under way.</summary>
+    public long DockedAtSettlementId => _arrived ? _destSettlementId : -1;
+
+    /// <summary>Ore units currently aboard.</summary>
+    public long CargoUnits => _cargoUnits;
+
+    /// <summary>Maximum ore the ship can carry (0 = a non-trading hull, e.g. the competitor).</summary>
+    public long CargoCapacity => _cargoCapacity;
+
+    /// <summary>Whether this ship trades into the player firm's ledger on docking.</summary>
+    public bool IsPlayer => _isPlayer;
+
+    /// <summary>Current SITREP cadence in seconds (0 = the ship runs silent between decision points).</summary>
+    public long SitrepIntervalSeconds => _sitrepIntervalSeconds;
+
     /// <inheritdoc/>
     public (long X, long Y, long Z) PositionMmAt(long tSeconds) => _trajectory.PositionMmAt(tSeconds);
 
@@ -92,7 +116,10 @@ public sealed class Ship : ISpatial
         long departSettlementId,
         long destSettlementId,
         long arriveSeconds,
-        long fuelMmPerSec)
+        long fuelMmPerSec,
+        long sitrepIntervalSeconds = 0,
+        long cargoCapacity = 0,
+        bool isPlayer = false)
     {
         long departSeconds = world.NowSeconds;
         if (arriveSeconds <= departSeconds)
@@ -106,11 +133,39 @@ public sealed class Ship : ISpatial
         var trajectory = new Trajectory(new Trajectory.Leg(departSeconds, px, py, pz, 0, 0, 0));
         var ship = new Ship(
             id, world, trajectory, fuelMmPerSec,
-            departSettlementId, destSettlementId, departSeconds, arriveSeconds);
+            departSettlementId, destSettlementId, departSeconds, arriveSeconds)
+        {
+            _sitrepIntervalSeconds = sitrepIntervalSeconds,
+            _cargoCapacity = cargoCapacity,
+            _isPlayer = isPlayer,
+        };
 
         world.AddEntity(id, ship, isObserver: true);
         ship.CommitTo(departSeconds, departSettlementId, destSettlementId, arriveSeconds, TelemetryCause.Departed, announcePlan: true);
+        ship.EnsureSitrep();
         return ship;
+    }
+
+    /// <summary>
+    /// The player's dispatch, delivered (roadmap §5): re-routes the ship to
+    /// <paramref name="targetSettlementId"/> and sets its SITREP cadence. Works whether the ship is
+    /// docked (a launch) or under way (a divert). ETA is sized from the straight-line distance at a
+    /// fixed cruise speed (§3, no transfer solver yet). Invoked from the scheduled reception callback,
+    /// so "now" is the instant the order actually reached the ship (§2.2).
+    /// </summary>
+    public void ApplyDispatch(ISimContext ctx, long targetSettlementId, long sitrepIntervalSeconds)
+    {
+        long now = ctx.NowSeconds;
+        (long cx, long cy, long cz) = _trajectory.PositionMmAt(now);
+        (long tx, long ty, long tz) = _world.EntitySpatial(targetSettlementId).PositionMmAt(now);
+        long distance = IntMath.DistanceMm(cx, cy, cz, tx, ty, tz);
+        long eta = distance / CruiseMmPerSec;
+        long arrive = now + (eta > 0 ? eta : 1); // never same-instant; a co-located target still takes a tick
+
+        long origin = _arrived ? _destSettlementId : InTransit;
+        _sitrepIntervalSeconds = sitrepIntervalSeconds;
+        CommitTo(now, origin, targetSettlementId, arrive, TelemetryCause.Departed, announcePlan: true);
+        EnsureSitrep();
     }
 
     /// <summary>
@@ -163,6 +218,11 @@ public sealed class Ship : ISpatial
     private void CommitTo(
         long now, long originSettlementId, long destSettlementId, long arriveSeconds, TelemetryCause cause, bool announcePlan)
     {
+        if (_arrived)
+        {
+            BuyAtPort(originSettlementId); // fill the hold before leaving a market port
+        }
+
         (long cx, long cy, long cz) = _trajectory.PositionMmAt(now);
         (long pvx, long pvy, long pvz) = _trajectory.CurrentVelocity;
         (long nvx, long nvy, long nvz) = InterceptVelocity(_world, destSettlementId, cx, cy, cz, now, arriveSeconds);
@@ -215,6 +275,90 @@ public sealed class Ship : ISpatial
         (long x, long y, long z) = _trajectory.PositionMmAt(_arriveSeconds);
         (long vx, long vy, long vz) = _trajectory.CurrentVelocity;
         _world.Emit(Id, new Telemetry(Id, x, y, z, vx, vy, vz, TelemetryCause.Arrived));
+        SellAtPort();
+    }
+
+    // Arrival trade (roadmap §3): sell the whole hold at the arrival port's ground-truth price. Cargo
+    // is bought on departure (see CommitTo) and sold here, so cash realizes the spread between the two
+    // ports — and the player only ever saw stale quotes when choosing the route (§2.2). Only player
+    // trading hulls touch the firm ledger.
+    private void SellAtPort()
+    {
+        if (!_isPlayer || _cargoUnits <= 0 || !_world.TryGetMarket(_destSettlementId, out IPriceSource market))
+        {
+            return;
+        }
+
+        long price = market.PriceMinorUnits;
+        long sold = _cargoUnits;
+        _world.Credits += sold * price;
+        _cargoUnits = 0;
+        _world.Emit(Id, new TradeExecuted(Id, _destSettlementId, market.CommodityId, sold, 0, price, _world.Credits));
+    }
+
+    // Departure trade: if a player hull leaves a port that has a market, it fills the hold at that
+    // port's local price. Buy cheap here, sell dear on arrival — that is the whole game, played on
+    // prices the player could only see stale.
+    private void BuyAtPort(long originSettlementId)
+    {
+        if (!_isPlayer || _cargoCapacity <= _cargoUnits || !_world.TryGetMarket(originSettlementId, out IPriceSource market))
+        {
+            return;
+        }
+
+        long price = market.PriceMinorUnits;
+        long bought = _cargoCapacity - _cargoUnits;
+        _world.Credits -= bought * price;
+        _cargoUnits = _cargoCapacity;
+        _world.Emit(Id, new TradeExecuted(Id, originSettlementId, market.CommodityId, 0, bought, price, _world.Credits));
+    }
+
+    // Runs the periodic SITREP chain: one self-rescheduling event per ship, emitting a routine position
+    // report every interval while under way. The report travels at c like everything (§2.2), so HQ's
+    // ghost only advances when a SITREP arrives — the position channel the player set as a mission
+    // parameter. Reports pause while docked (position is constant) but the cadence resumes on departure.
+    private void EnsureSitrep()
+    {
+        if (_sitrepIntervalSeconds > 0 && !_sitrepRunning)
+        {
+            _sitrepRunning = true;
+            _world.Sim.Schedule(new SitrepEvent(this, _world.NowSeconds + _sitrepIntervalSeconds));
+        }
+    }
+
+    private void OnSitrep(ISimContext ctx)
+    {
+        if (_sitrepIntervalSeconds <= 0)
+        {
+            _sitrepRunning = false; // SITREPs turned off — let the chain die
+            return;
+        }
+
+        if (!_arrived)
+        {
+            (long x, long y, long z) = _trajectory.PositionMmAt(ctx.NowSeconds);
+            (long vx, long vy, long vz) = _trajectory.CurrentVelocity;
+            _world.Emit(Id, new Telemetry(Id, x, y, z, vx, vy, vz, TelemetryCause.Routine));
+        }
+
+        _world.Sim.Schedule(new SitrepEvent(this, ctx.NowSeconds + _sitrepIntervalSeconds));
+    }
+
+    private sealed class SitrepEvent : ISimEvent
+    {
+        private readonly Ship _ship;
+
+        public SitrepEvent(Ship ship, long timeSeconds)
+        {
+            _ship = ship;
+            TimeSeconds = timeSeconds;
+        }
+
+        public long TimeSeconds { get; }
+
+        public long Ordinal => Ordinals.Sitrep + _ship.Id;
+
+        public void Apply(ISimContext ctx) => _ship.OnSitrep(ctx);
     }
 
     private sealed class ArrivalEvent : ISimEvent

@@ -26,6 +26,7 @@ public sealed class SimWorld
 {
     private readonly SortedDictionary<long, ISpatial> _spatial = new();
     private readonly SortedSet<long> _observers = new();
+    private readonly SortedDictionary<long, IPriceSource> _markets = new();
     private long _nextEventId = 1;
 
     public SimWorld(ulong worldSeed, long startSeconds = 0)
@@ -54,6 +55,19 @@ public sealed class SimWorld
 
     /// <summary>Current sim-time in seconds.</summary>
     public long NowSeconds => Sim.NowSeconds;
+
+    /// <summary>
+    /// The player firm's cash balance in minor currency units (§2.5). Banking is treated as central and
+    /// instant; only the physical <i>reports</i> of a distant trade are light-lagged (§2.2). Updated by
+    /// a ship trading at a port.
+    /// </summary>
+    public long Credits { get; set; }
+
+    /// <summary>Registers a settlement's market so a ship docking there can trade against its real price.</summary>
+    public void RegisterMarket(long settlementId, IPriceSource market) => _markets[settlementId] = market;
+
+    /// <summary>The market at <paramref name="settlementId"/>, if the settlement has one.</summary>
+    public bool TryGetMarket(long settlementId, out IPriceSource market) => _markets.TryGetValue(settlementId, out market!);
 
     /// <summary>Ids of entities with a receiver, in a defined (sorted) order (§2.3 r3).</summary>
     public IReadOnlyCollection<long> Observers => _observers;

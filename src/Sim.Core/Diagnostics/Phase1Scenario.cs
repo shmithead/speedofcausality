@@ -22,8 +22,12 @@ public static class Phase1Scenario
     public const long MarsPortId = 101;
     public const long CeresPortId = 102;
     public const long MarsMarketId = 200;
+    public const long CeresMarketId = 201;
     public const long PlayerShipId = 300;
     public const long CompetitorId = 301;
+
+    /// <summary>The player firm's opening cash (minor units).</summary>
+    public const long StartingCredits = 1_000_000L;
 
     /// <summary>Builds the seeded world with everything registered and both ships departed.</summary>
     public static SimWorld Build(ulong seed)
@@ -41,16 +45,33 @@ public static class Phase1Scenario
         world.AddEntity(MarsPortId, new Settlement(MarsPortId, "Mars-Port", mars), isObserver: true);
         world.AddEntity(CeresPortId, new Settlement(CeresPortId, "Ceres-Port", ceres), isObserver: true);
 
-        var market = new Market(
-            MarsMarketId, world, MarsPortId, commodityId: 0,
-            startPriceMinorUnits: 10_000, intervalSeconds: 7 * Day,
-            floorMinorUnits: 5_000, ceilMinorUnits: 15_000, maxStepMinorUnits: 800);
-        world.Horizons.Register(market);
+        world.Credits = StartingCredits;
 
-        Ship.Depart(world, PlayerShipId, HqId, MarsPortId, arriveSeconds: 200 * Day, fuelMmPerSec: 500_000_000L);
+        // Two Ore markets with different opening prices, so there is a spread to trade on (buy cheap at
+        // Ceres, sell dear at Mars — if the stale quote you routed on still holds when you arrive).
+        var marsMarket = new Market(
+            MarsMarketId, world, MarsPortId, Commodity.Ore,
+            startPriceMinorUnits: 12_000, intervalSeconds: 7 * Day,
+            floorMinorUnits: 8_000, ceilMinorUnits: 16_000, maxStepMinorUnits: 800);
+        var ceresMarket = new Market(
+            CeresMarketId, world, CeresPortId, Commodity.Ore,
+            startPriceMinorUnits: 7_000, intervalSeconds: 7 * Day,
+            floorMinorUnits: 4_000, ceilMinorUnits: 11_000, maxStepMinorUnits: 700);
+        foreach (Market m in new[] { marsMarket, ceresMarket })
+        {
+            world.Horizons.Register(m);
+            world.RegisterMarket(m.SettlementId, m);
+        }
+
+        // The player freighter: reports every 10 days, carries 100 units of Ore, trades on the ledger.
+        Ship.Depart(
+            world, PlayerShipId, HqId, MarsPortId, arriveSeconds: 200 * Day, fuelMmPerSec: 500_000_000L,
+            sitrepIntervalSeconds: 10 * Day, cargoCapacity: 100, isPlayer: true);
+
         ScriptedRoute.Begin(
             world, CompetitorId, new[] { HqId, MarsPortId, CeresPortId },
-            legDurationSeconds: 150 * Day, dwellSeconds: 10 * Day, fuelMmPerSec: 5_000_000_000L);
+            legDurationSeconds: 150 * Day, dwellSeconds: 10 * Day, fuelMmPerSec: 5_000_000_000L,
+            sitrepIntervalSeconds: 20 * Day);
 
         return world;
     }

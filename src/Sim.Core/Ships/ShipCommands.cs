@@ -27,4 +27,23 @@ public static class ShipCommands
         world.ScheduleReception(ship.Id, ev, ctx => ship.ApplyCountermand(ctx, newDestSettlementId));
         return ev;
     }
+
+    /// <summary>
+    /// Sends <paramref name="ship"/> to <paramref name="targetSettlementId"/> with a SITREP cadence of
+    /// <paramref name="sitrepIntervalSeconds"/>. Emits the <see cref="DispatchOrder"/> from
+    /// <paramref name="playerEntityId"/> (HQ) and schedules its arrival at the ship, where
+    /// <see cref="Ship.ApplyDispatch"/> runs on reception — instantly for a ship at HQ, a light-lag
+    /// later for one across the system (§2.2). This is the order a right-click on the map issues.
+    /// </summary>
+    public static EventRecord IssueDispatch(
+        SimWorld world,
+        Ship ship,
+        long playerEntityId,
+        long targetSettlementId,
+        long sitrepIntervalSeconds)
+    {
+        EventRecord ev = world.Emit(playerEntityId, new DispatchOrder(ship.Id, targetSettlementId, sitrepIntervalSeconds));
+        world.ScheduleReception(ship.Id, ev, ctx => ship.ApplyDispatch(ctx, targetSettlementId, sitrepIntervalSeconds));
+        return ev;
+    }
 }

@@ -95,3 +95,40 @@ public sealed record Countermand(long ShipId, long NewDestSettlementId) : IScope
 
     public long Recipient => ShipId;
 }
+
+/// <summary>
+/// The player's mission order to a ship (roadmap §5, generalized): go to <paramref name="TargetSettlementId"/>
+/// and report position every <paramref name="SitrepIntervalSeconds"/>. Like a countermand it is
+/// <see cref="EventScope.Direct"/> and travels at c (§2.2) — a ship docked at Earth-HQ gets it almost
+/// at once; a ship at Mars only after the light-lag. On arrival it applies whether the ship is docked
+/// (launch) or in flight (divert). This is the order the strategic map issues on a right-click.
+/// </summary>
+/// <param name="ShipId">The addressed ship (also the routing <see cref="Recipient"/>).</param>
+/// <param name="TargetSettlementId">Where to send it.</param>
+/// <param name="SitrepIntervalSeconds">How often the ship transmits a position report while under way.</param>
+public sealed record DispatchOrder(long ShipId, long TargetSettlementId, long SitrepIntervalSeconds) : IScoped
+{
+    public int SchemaVersion => 1;
+
+    public EventScope Scope => EventScope.Direct;
+
+    public long Recipient => ShipId;
+}
+
+/// <summary>
+/// A ship traded at a port (roadmap §3): it sold whatever it carried and bought to capacity at the
+/// port's <i>local</i> price. Broadcast so HQ learns the outcome — but only after the light-lag, so
+/// the map's ledger view lags the firm's true balance the same way prices and positions do (§2.2).
+/// The trade itself used the real price at the port, not HQ's stale quote — that gap is the game.
+/// </summary>
+public sealed record TradeExecuted(
+    long ShipId,
+    long SettlementId,
+    int CommodityId,
+    long UnitsSold,
+    long UnitsBought,
+    long PriceMinorUnits,
+    long CreditsAfter) : IEventPayload
+{
+    public int SchemaVersion => 1;
+}

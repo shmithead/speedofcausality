@@ -24,4 +24,7 @@ internal static class Ordinals
 
     /// <summary>Scripted-route departures: ordinal = <see cref="ScriptedDeparture"/> + ship id.</summary>
     public const long ScriptedDeparture = 1L << 54;
+
+    /// <summary>Periodic SITREP position reports: ordinal = <see cref="Sitrep"/> + ship id.</summary>
+    public const long Sitrep = 1L << 55;
 }

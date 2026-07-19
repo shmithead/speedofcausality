@@ -18,7 +18,7 @@ namespace Sim.Core.Economy;
 /// it perturbs no other subsystem's rolls, and it is bounded to keep the economy from exploding
 /// (§8 risk 4).</para>
 /// </summary>
-public sealed class Market : HorizonEntity
+public sealed class Market : HorizonEntity, IPriceSource
 {
     private readonly SimWorld _world;
     private readonly long _settlementId;
