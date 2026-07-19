@@ -48,6 +48,10 @@ public partial class StrategicMap : Node2D
 
     private (long Ship, long Target, long IssuedAt, long Reception)? _pending;
 
+    private bool _autoFollow = true; // auto slow-mo while an order is in flight, restore on delivery
+    private bool _following;
+    private double _savedTimeScale;
+
     private UiMode _mode = UiMode.None;
     private Vector2 _menuPos;
     private long _menuPort;
@@ -65,6 +69,12 @@ public partial class StrategicMap : Node2D
         {
             _simSeconds += _timeScale * delta;
             _world.Sim.RunUntil((long)_simSeconds);
+        }
+
+        // Restore normal speed once the order we are following has been delivered.
+        if (_following && (_pending is not { } o || (long)_simSeconds >= o.Reception))
+        {
+            EndFollow();
         }
 
         QueueRedraw();
@@ -136,12 +146,51 @@ public partial class StrategicMap : Node2D
                 break;
             case Key.Equal or Key.Plus:
                 _timeScale *= 2.0;
+                _following = false; // a manual speed change cancels the auto-follow
                 break;
             case Key.Minus:
                 // Floor at 1 sim-minute/sec so you can slow right down to watch a packet cross the
                 // light-lag (minutes) — otherwise it blinks past at transfer-scale compression.
                 _timeScale = System.Math.Max(_timeScale / 2.0, 60.0);
+                _following = false;
                 break;
+            case Key.F:
+                _autoFollow = !_autoFollow;
+                break;
+        }
+    }
+
+    // Auto slow-mo: when an order with real lag is issued, drop to a speed that makes the packet take
+    // ~20 real seconds to cross, and remember the previous speed to restore on delivery.
+    private void BeginFollow()
+    {
+        if (!_autoFollow || _pending is not { } order)
+        {
+            return;
+        }
+
+        long lag = order.Reception - order.IssuedAt;
+        if (lag < 30)
+        {
+            return; // ship is right on top of HQ — nothing to watch
+        }
+
+        if (!_following)
+        {
+            _savedTimeScale = _timeScale;
+        }
+
+        _timeScale = System.Math.Clamp(lag / 20.0, 10.0, _savedTimeScale); // slow down only, never speed up
+        _paused = false;
+        _following = true;
+    }
+
+    private void EndFollow()
+    {
+        if (_following)
+        {
+            _timeScale = _savedTimeScale;
+            _following = false;
         }
     }
 
@@ -174,6 +223,7 @@ public partial class StrategicMap : Node2D
         {
             var ev = ShipCommands.IssueDispatch(_world, ship, ObserverId, _menuPort, days * Day);
             _pending = (ship.Id, _menuPort, _world.NowSeconds, _world.Knowledge.ReceptionTime(ship.Id, ev));
+            BeginFollow();
         }
 
         _mode = UiMode.None;
@@ -234,6 +284,12 @@ public partial class StrategicMap : Node2D
         IReadOnlyDictionary<long, ShipKnowledge> view = ShipView.Read(_world.Knowledge, ObserverId, now);
         if (view.TryGetValue(shipId, out ShipKnowledge? k))
         {
+            // Known-docked: it rides its port body (the plan would keep projecting past the dock).
+            if (k.Ghost is { Cause: TelemetryCause.Arrived } && k.Plan is { } docked)
+            {
+                return _world.EntitySpatial(BodyForPort(docked.DestSettlementId)).PositionMmAt(atTime);
+            }
+
             if (k.Plan is { } plan)
             {
                 return plan.PredictedPositionMmAt(atTime);
@@ -288,7 +344,8 @@ public partial class StrategicMap : Node2D
     private void DrawHud(long now, Font font)
     {
         var line = new Vector2(16, 24);
-        DrawString(font, line, $"T+{now / Day}d   {FmtRate(_timeScale)}{(_paused ? "  [PAUSED]" : "")}   Credits: {_world.Credits:N0}",
+        DrawString(font, line,
+            $"T+{now / Day}d   {FmtRate(_timeScale)}{(_paused ? "  [PAUSED]" : "")}{(_following ? "  [FOLLOWING ORDER]" : "")}   Credits: {_world.Credits:N0}",
             HorizontalAlignment.Left, -1, 14, Colors.White);
 
         line.Y += 26;
@@ -318,7 +375,7 @@ public partial class StrategicMap : Node2D
         DrawOrderBanner(now, font);
 
         DrawString(font, new Vector2(16, GetViewportRect().Size.Y - 14),
-            "[space] pause   [+/-] time   right-click a body to send a ship",
+            $"[space] pause   [+/-] time   [F] auto-follow: {(_autoFollow ? "on" : "off")}   right-click a body to send a ship",
             HorizontalAlignment.Left, -1, 12, new Color(0.6f, 0.6f, 0.65f));
     }
 
@@ -391,24 +448,7 @@ public partial class StrategicMap : Node2D
         return (dist / AuMm, (long)(dist / Ship.CruiseMmPerSec / Day));
     }
 
-    private (long X, long Y, long Z) KnownShipPos(long shipId, long now)
-    {
-        IReadOnlyDictionary<long, ShipKnowledge> view = ShipView.Read(_world.Knowledge, ObserverId, now);
-        if (view.TryGetValue(shipId, out ShipKnowledge? k))
-        {
-            if (k.Plan is { } plan && k.Ghost is not { Cause: TelemetryCause.Arrived })
-            {
-                return plan.PredictedPositionMmAt(now);
-            }
-
-            if (k.Ghost is { } g)
-            {
-                return (g.X, g.Y, g.Z);
-            }
-        }
-
-        return _world.EntitySpatial(Phase1Scenario.HqId).PositionMmAt(now);
-    }
+    private (long X, long Y, long Z) KnownShipPos(long shipId, long now) => PredictedShipPosAt(shipId, now, now);
 
     private long BodyAtScreen(Vector2 pos)
     {
