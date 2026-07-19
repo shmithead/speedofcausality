@@ -23,24 +23,9 @@ public sealed class MarketTests
     private const long MarsMarketId = 200;
     private const int Ore = 0;
 
-    // Earth-like and Mars-like elements (a in Gm, period in s) — mirrors the Kepler test corpus.
-    private static Body Earth() => Body(EarthId, "Earth", a: 149.6, e: 0.0167, i: 0.0, m0: 6.240, period: 31_558_150L);
-    private static Body Mars() => Body(MarsId, "Mars", a: 227.9, e: 0.0934, i: 0.0323, m0: 0.338, period: 59_355_000L);
-
-    private static Body Body(long id, string name, double a, double e, double i, double m0, long period)
-    {
-        var el = new KeplerianElements
-        {
-            SemiMajorAxisGm = Fixed64.FromDouble(a),
-            Eccentricity = Fixed64.FromDouble(e),
-            InclinationRad = Fixed64.FromDouble(i),
-            AscendingNodeRad = Fixed64.Zero,
-            ArgPeriapsisRad = Fixed64.Zero,
-            MeanAnomalyEpochRad = Fixed64.FromDouble(m0),
-            PeriodSeconds = period,
-        };
-        return new Body(id, name, EphemerisTable.Build(el));
-    }
+    // Real J2000 elements (SolSystem), but with these tests' own entity ids.
+    private static Body Earth() => new(EarthId, "Earth", EphemerisTable.Build(SolSystem.Earth));
+    private static Body Mars() => new(MarsId, "Mars", EphemerisTable.Build(SolSystem.Mars));
 
     private static (SimWorld World, Market Market) BuildScenario(ulong seed = 42)
     {

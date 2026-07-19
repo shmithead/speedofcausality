@@ -17,27 +17,12 @@ public sealed class ScriptedRouteTests
     private const long CompId = 200;
     private const long Fuel = 5_000_000_000L;
 
-    private static Body Body(long id, string name, double a, double e, double i, double m0, long period)
-    {
-        var el = new KeplerianElements
-        {
-            SemiMajorAxisGm = Fixed64.FromDouble(a),
-            Eccentricity = Fixed64.FromDouble(e),
-            InclinationRad = Fixed64.FromDouble(i),
-            AscendingNodeRad = Fixed64.Zero,
-            ArgPeriapsisRad = Fixed64.Zero,
-            MeanAnomalyEpochRad = Fixed64.FromDouble(m0),
-            PeriodSeconds = period,
-        };
-        return new Body(id, name, EphemerisTable.Build(el));
-    }
-
     private static SimWorld BuildWorld(ulong seed = 42)
     {
         var world = new SimWorld(seed);
-        Body earth = Body(EarthId, "Earth", 149.6, 0.0167, 0.0, 6.240, 31_558_150L);
-        Body mars = Body(MarsId, "Mars", 227.9, 0.0934, 0.0323, 0.338, 59_355_000L);
-        Body ceres = Body(CeresId, "Ceres", 413.8, 0.0758, 0.1857, 1.541, 145_138_000L);
+        var earth = new Body(EarthId, "Earth", EphemerisTable.Build(SolSystem.Earth));
+        var mars = new Body(MarsId, "Mars", EphemerisTable.Build(SolSystem.Mars));
+        var ceres = new Body(CeresId, "Ceres", EphemerisTable.Build(SolSystem.Ceres));
         world.AddEntity(EarthId, earth, isObserver: false);
         world.AddEntity(MarsId, mars, isObserver: false);
         world.AddEntity(CeresId, ceres, isObserver: false);
