@@ -100,7 +100,16 @@ public sealed class Ship : ISpatial
     public long SitrepIntervalSeconds => _sitrepIntervalSeconds;
 
     /// <inheritdoc/>
-    public (long X, long Y, long Z) PositionMmAt(long tSeconds) => _trajectory.PositionMmAt(tSeconds);
+    /// <remarks>
+    /// While docked, the ship <b>is</b> its port body (§2.7 almanac): it rides the body's orbit, not the
+    /// straight-line continuation of the arrival coast — that would drift off as the body curves away.
+    /// The <c>t &gt;= _arriveSeconds</c> guard keeps past coast queries on the trajectory, so historical
+    /// position reconstruction (for folding old telemetry) stays correct.
+    /// </remarks>
+    public (long X, long Y, long Z) PositionMmAt(long tSeconds)
+        => _arrived && tSeconds >= _arriveSeconds
+            ? _world.EntitySpatial(_destSettlementId).PositionMmAt(tSeconds)
+            : _trajectory.PositionMmAt(tSeconds);
 
     /// <summary>
     /// Files a plan and departs <paramref name="departSettlementId"/> now for
@@ -223,11 +232,13 @@ public sealed class Ship : ISpatial
             BuyAtPort(originSettlementId); // fill the hold before leaving a market port
         }
 
-        (long cx, long cy, long cz) = _trajectory.PositionMmAt(now);
+        // Start from the ship's true current position — the port body's position if docked (so a
+        // re-dispatch leaves from the planet, not the drifted coast), else the mid-flight coast point.
+        (long cx, long cy, long cz) = PositionMmAt(now);
         (long pvx, long pvy, long pvz) = _trajectory.CurrentVelocity;
         (long nvx, long nvy, long nvz) = InterceptVelocity(_world, destSettlementId, cx, cy, cz, now, arriveSeconds);
 
-        _trajectory.Burn(now, nvx - pvx, nvy - pvy, nvz - pvz);
+        _trajectory.DepartFrom(now, cx, cy, cz, nvx, nvy, nvz);
 
         // Phase 1: fuel is a budget spent per burn, not yet a hard constraint — it may go negative, and
         // a ship never refuses an order for lack of delta-v. Enforcing it (refuse / strand) is Phase 2

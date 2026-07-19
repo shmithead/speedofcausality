@@ -1,4 +1,5 @@
 using Sim.Core.Economy;
+using Sim.Core.Numerics;
 using Sim.Core.Orbits;
 using Sim.Core.Ships;
 using Sim.Core.World;
@@ -112,6 +113,30 @@ public sealed class DispatchTradingTests
 
         Assert.Equal(beforeRun + (100 * (12_000 - 7_000)), world.Credits);
         Assert.Equal(0, ship.CargoUnits); // sold out at Mars
+    }
+
+    [Fact]
+    public void A_Docked_Ship_Redeparts_From_Its_Port_Not_A_Drifted_Point()
+    {
+        SimWorld world = BuildWorld(withMarkets: false);
+        Ship ship = Ship.Depart(world, ShipId, HqId, MarsPortId, 100 * Day, 500_000_000L);
+        world.Sim.RunUntil(120 * Day); // dock at Mars, then idle 20 days while Mars keeps orbiting
+
+        // The docked ship must be co-located with Mars, not drifting past it.
+        (long sx, long sy, long sz) = ship.PositionMmAt(world.NowSeconds);
+        (long mx, long my, long mz) = world.EntitySpatial(MarsId).PositionMmAt(world.NowSeconds);
+        Assert.Equal(0, IntMath.DistanceMm(sx, sy, sz, mx, my, mz));
+
+        // Re-dispatch: the new leg's filed plan must start on Mars, not somewhere in empty space.
+        long logBefore = world.Log.Count;
+        ShipCommands.IssueDispatch(world, ship, HqId, CeresPortId, 0);
+        world.Sim.RunUntil(400 * Day);
+
+        FlightPlanFiled newLeg = world.Log.Events.Skip((int)logBefore)
+            .Select(e => e.Payload).OfType<FlightPlanFiled>().First(p => p.DestSettlementId == CeresPortId);
+        (long dmx, long dmy, long dmz) = world.EntitySpatial(MarsId).PositionMmAt(newLeg.DepartSeconds);
+        long offset = IntMath.DistanceMm(newLeg.X, newLeg.Y, newLeg.Z, dmx, dmy, dmz);
+        Assert.True(offset < 1_000_000_000L, $"re-departure should start on Mars, was {offset} mm off");
     }
 
     [Fact]

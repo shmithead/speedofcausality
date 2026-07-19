@@ -59,6 +59,23 @@ public sealed class Trajectory
     }
 
     /// <summary>
+    /// Begins a new leg from an <b>explicit</b> position and absolute velocity. Used when a ship leaves
+    /// a dock: its start is the port body's current position, not an extrapolation of the arrival coast
+    /// (a docked ship rides its body, so the old leg's straight-line continuation has drifted away).
+    /// The start time must not precede the current leg's start.
+    /// </summary>
+    public void DepartFrom(long atSeconds, long x, long y, long z, long vx, long vy, long vz)
+    {
+        if (atSeconds < _legs[^1].StartSeconds)
+        {
+            throw new InvalidOperationException(
+                $"Departure at {atSeconds}s precedes the current leg start {_legs[^1].StartSeconds}s.");
+        }
+
+        _legs.Add(new Leg(atSeconds, x, y, z, vx, vy, vz));
+    }
+
+    /// <summary>
     /// Position at <paramref name="tSeconds"/> from the active leg (the last one starting at or before
     /// <paramref name="tSeconds"/>): <c>start + velocity · (t − legStart)</c>. Before the first leg's
     /// start it extrapolates leg 0 backward — callers only ever query a ship at or after it exists.
