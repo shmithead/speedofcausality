@@ -25,25 +25,28 @@ godot --path src/Game
 
 - **Space** — pause / resume time
 - **+ / −** — speed up / slow down compression
-- **1 / 2 / 3** — order the player's freighter to Earth-HQ / Mars / Ceres. The order is a countermand:
-  it travels at c and only takes effect when it reaches the ship. The "order in flight" banner shows
-  the travel time and delivery ETA; watch the ghost react a lag *after* delivery. (In-flight only —
-  a docked ship can't be countermanded yet.)
+- **Right-click a body** → a menu lists your freighter(s) with the distance and ETA to that body.
+  Click one → type a **SITREP interval (days)** → **Enter** to launch. The dispatch order travels at c
+  (instant for a ship at HQ, a light-lag later for one across the system); the "order in flight" banner
+  counts down its travel and delivery.
+- **Space** pause · **+ / −** time compression.
 
-The HUD also shows the live **one-way signal lag from HQ** to each port, and prices/ghosts now report
-staleness in hours/minutes so a sub-day light-lag is actually visible.
+Once under way a ship **transmits a SITREP every N days**; each report crosses space at c, so the map's
+ghost only jumps when a report arrives. Buy **Ore** cheap at one port and sell it dear at another — but
+you route on **stale** prices, so a diversion is a bet. Your **Credits** are top-left.
 
 ## What you're looking at (the render rule)
 
-- **Sun** at the heliocentric origin; **planets/Ceres** at their true positions — they are
-  common-knowledge almanac (§2.7), not news that must arrive.
-- Each ship shows a **green predicted position** (extrapolated from its filed plan — fair to draw
-  live, and wrong exactly when the plan is wrong) and a **grey ghost** (its last *arrived* telemetry,
-  one light-lag stale). A ghost that has drifted off its filed plan turns **red** — the caused
-  deviation (§3).
-- **Prices** are last-known quotes with their age in days — as stale as the geometry makes them.
+- **Sun** at the heliocentric origin; **planets/Ceres** at their true positions — common-knowledge
+  almanac (§2.7), not news that must arrive.
+- A ship under way shows a **green predicted position** (from its filed plan — fair to draw live, wrong
+  exactly when the plan is wrong) and a **grey ghost** (its last arrived SITREP, one light-lag stale);
+  a ghost off its plan turns **red** (deviation, §3). A **docked** ship is labeled at its port, because
+  HQ heard it arrive.
+- **Ore prices** and ghosts are last-known values with their age — as stale as the geometry makes them.
+- Markets at **Mars** and **Ceres**; the light-lag to each is shown live in the HUD.
 
-No packet is ever drawn at a true in-flight position and no wavefront is drawn approaching; the screen
+No packet is drawn at a true in-flight position and no wavefront is drawn approaching; the screen
 contains only what has arrived plus predictions from it (§5, the spike's hard-won rule).
 
 > Note: this scene has not been run in-engine in the environment it was authored in (no Godot binary

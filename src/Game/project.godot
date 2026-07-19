@@ -1,5 +1,10 @@
-; Godot 4.7 project (C#). Frontend for the Speed of Causality sim (roadmap §1, §5).
-; The sim itself lives in ../Sim.Core (engine-free); this project references it.
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
 
 config_version=5
 
@@ -10,15 +15,11 @@ run/main_scene="res://Main.tscn"
 config/features=PackedStringArray("4.7", "C#", "Forward Plus")
 config/icon="res://icon.svg"
 
-[dotnet]
-
-project/assembly_name="Game"
-
 [display]
 
 window/size/viewport_width=1280
 window/size/viewport_height=800
 
-[rendering]
+[dotnet]
 
-renderer/rendering_method="forward_plus"
+project/assembly_name="Game"
