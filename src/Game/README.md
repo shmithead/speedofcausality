@@ -35,6 +35,13 @@ Once under way a ship **transmits a SITREP every N days**; each report crosses s
 ghost only jumps when a report arrives. Buy **Ore** cheap at one port and sell it dear at another — but
 you route on **stale** prices, so a diversion is a bet. Your **Credits** are top-left.
 
+**Watching an order fly:** dispatch (or re-dispatch) a ship and a **yellow packet travels at c from HQ**
+toward where you believe the ship is, reaching it at the predicted delivery time. It is a *prediction*
+of your own transmission — the true ship changes course when the signal actually arrives, and you only
+see that confirmed later, when the ship's telemetry crawls back and its ghost/plan swing to the new
+destination. Send to Mars, then re-send to Ceres, and you can watch the whole loop: packet out → silent
+gap → ghost reacts.
+
 ## What you're looking at (the render rule)
 
 - **Sun** at the heliocentric origin; **planets/Ceres** at their true positions — common-knowledge
@@ -46,8 +53,10 @@ you route on **stale** prices, so a diversion is a bet. Your **Credits** are top
 - **Ore prices** and ghosts are last-known values with their age — as stale as the geometry makes them.
 - Markets at **Mars** and **Ceres**; the light-lag to each is shown live in the HUD.
 
-No packet is drawn at a true in-flight position and no wavefront is drawn approaching; the screen
-contains only what has arrived plus predictions from it (§5, the spike's hard-won rule).
+The only packet drawn is **your own outgoing order**, shown as a prediction — you know you sent it, at
+c, toward where you believe the ship is. That is legal (a prediction from what HQ knows), unlike drawing
+the true in-flight position of a signal you don't control, which the spike proved was a lie. No wavefront
+is drawn approaching; the screen is only what has arrived plus predictions from it (§5).
 
 > Note: this scene has not been run in-engine in the environment it was authored in (no Godot binary
 > there). The Sim.Core calls it makes are covered by tests; the Godot wiring may need a first-run

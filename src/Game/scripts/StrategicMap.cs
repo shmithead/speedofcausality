@@ -46,7 +46,7 @@ public partial class StrategicMap : Node2D
     private bool _paused;
     private float _pxPerAu = 130f;
 
-    private (long Target, long IssuedAt, long Reception)? _pending;
+    private (long Ship, long Target, long IssuedAt, long Reception)? _pending;
 
     private UiMode _mode = UiMode.None;
     private Vector2 _menuPos;
@@ -171,7 +171,7 @@ public partial class StrategicMap : Node2D
         if (_world.EntitySpatial(_sitrepShip) is Ship ship)
         {
             var ev = ShipCommands.IssueDispatch(_world, ship, ObserverId, _menuPort, days * Day);
-            _pending = (_menuPort, _world.NowSeconds, _world.Knowledge.ReceptionTime(ship.Id, ev));
+            _pending = (ship.Id, _menuPort, _world.NowSeconds, _world.Knowledge.ReceptionTime(ship.Id, ev));
         }
 
         _mode = UiMode.None;
@@ -195,8 +195,55 @@ public partial class StrategicMap : Node2D
         }
 
         DrawShips(center, now, font);
+        DrawPacket(center, now);
         DrawHud(now, font);
         DrawMenu(now, font);
+    }
+
+    // The player's own order in flight, drawn at c (roadmap §2.2 view-layer). This is a PREDICTION, and
+    // legal for exactly that reason: HQ knows it sent the order from here at this time at speed c, so it
+    // can extrapolate where the signal is — aimed at where HQ *believes* the ship is (its filed plan).
+    // The packet meets the predicted ship at the predicted reception; the TRUE deviation only shows once
+    // the ship's telemetry crawls back (the ghost/plan swing that follows). Wrong exactly when belief is.
+    private void DrawPacket(Vector2 center, long now)
+    {
+        if (_pending is not { } order || now < order.IssuedAt || now >= order.Reception)
+        {
+            return;
+        }
+
+        (long hx, long hy, long _hz) = _world.EntitySpatial(ObserverId).PositionMmAt(order.IssuedAt);
+        (long ex, long ey, long _ez) = PredictedShipPosAt(order.Ship, order.Reception, now);
+        Vector2 hq = ToScreen(center, hx, hy);
+        Vector2 dst = ToScreen(center, ex, ey);
+
+        float frac = (float)((double)(now - order.IssuedAt) / (order.Reception - order.IssuedAt));
+        Vector2 pkt = hq.Lerp(dst, frac);
+
+        DrawLine(pkt, dst, new Color(1f, 0.85f, 0.3f, 0.12f), 1f); // path still to run
+        DrawLine(hq, pkt, new Color(1f, 0.85f, 0.3f, 0.45f), 1f);  // trail already crossed
+        DrawCircle(pkt, 4f, new Color(1f, 0.9f, 0.45f));           // the order, at c
+    }
+
+    // Where HQ believes ship <id> will be at <atTime>: extrapolated from the plan it has heard, else the
+    // last ghost, else HQ. Never ground truth.
+    private (long X, long Y, long Z) PredictedShipPosAt(long shipId, long atTime, long now)
+    {
+        IReadOnlyDictionary<long, ShipKnowledge> view = ShipView.Read(_world.Knowledge, ObserverId, now);
+        if (view.TryGetValue(shipId, out ShipKnowledge? k))
+        {
+            if (k.Plan is { } plan)
+            {
+                return plan.PredictedPositionMmAt(atTime);
+            }
+
+            if (k.Ghost is { } g)
+            {
+                return (g.X, g.Y, g.Z);
+            }
+        }
+
+        return _world.EntitySpatial(ObserverId).PositionMmAt(atTime);
     }
 
     private void DrawShips(Vector2 center, long now, Font font)
